@@ -1,0 +1,41 @@
+{
+  "intro": {
+    "title": "Championship Highlights",
+    "subtitle": "Finals 2024",
+    "durationSeconds": 3,
+    "backgroundColor": "#0c0c0c"
+  },
+  "clips": [
+    {
+      "src": "https://remotion.media/BigBuckBunny.mp4",
+      "trimStart": 2,
+      "trimEnd": 8,
+      "name": "Opening"
+    },
+    {
+      "src": "https://remotion.media/BigBuckBunny.mp4",
+      "trimStart": 10,
+      "trimEnd": 16,
+      "name": "Action"
+    }
+  ],
+  "music": {
+    "src": "https://remotion.media/music.mp3",
+    "volume": 0.5,
+    "loop": true
+  },
+  "scoreboard": {
+    "visible": true,
+    "homeTeamName": "Eagles",
+    "awayTeamName": "Tigers",
+    "homeScore": 24,
+    "awayScore": 21,
+    "clockOrPeriod": "Q4 2:15"
+  },
+  "lowerThirds": {
+    "visible": true,
+    "title": "MVP Performance",
+    "subtitle": "Player of the Game"
+  },
+  "presetId": "landscape"
+}
