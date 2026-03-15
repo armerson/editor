@@ -141,6 +141,7 @@ export function IntroCard({ intro, className = "" }: Props) {
             flexDirection: "column",
             alignItems: "center",
             gap: 10,
+            width: 140,
           }}
         >
           {hasHome ? (
@@ -155,14 +156,15 @@ export function IntroCard({ intro, className = "" }: Props) {
           <span
             style={{
               animation: anim.homeLabel,
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: 700,
               color: "rgba(255,255,255,0.92)",
               textAlign: "center",
-              maxWidth: 120,
-              lineHeight: 1.25,
+              lineHeight: 1.3,
               letterSpacing: 0.2,
               fontFamily: "system-ui, -apple-system, sans-serif",
+              wordBreak: "break-word",
+              overflowWrap: "anywhere",
             }}
           >
             {intro.teamName || "Home"}
@@ -201,6 +203,7 @@ export function IntroCard({ intro, className = "" }: Props) {
             flexDirection: "column",
             alignItems: "center",
             gap: 10,
+            width: 140,
           }}
         >
           {hasAway ? (
@@ -216,14 +219,15 @@ export function IntroCard({ intro, className = "" }: Props) {
             <span
               style={{
                 animation: anim.awayLabel,
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: 700,
                 color: "rgba(255,255,255,0.92)",
                 textAlign: "center",
-                maxWidth: 120,
-                lineHeight: 1.25,
+                lineHeight: 1.3,
                 letterSpacing: 0.2,
                 fontFamily: "system-ui, -apple-system, sans-serif",
+                wordBreak: "break-word",
+                overflowWrap: "anywhere",
               }}
             >
               {intro.opponent || "Away"}

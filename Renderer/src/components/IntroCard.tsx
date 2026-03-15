@@ -1,5 +1,5 @@
 import React from 'react';
-import { AbsoluteFill, Img, useCurrentFrame, interpolate, spring, useVideoConfig } from 'remotion';
+import { AbsoluteFill, Img, useCurrentFrame, interpolate, spring } from 'remotion';
 import type { IntroCardData } from '../types/reel';
 
 /** Frames for overall card fade-in / fade-out — dissolves into first clip. */
@@ -8,6 +8,13 @@ const TRANSITION_FRAMES = 15;
 type IntroCardProps = IntroCardData & {
   /** Total duration of the intro in frames — used to time the fade-out. */
   durationFrames: number;
+  /**
+   * Frames per second of the composition — passed as a prop rather than
+   * read via useVideoConfig() to keep the component purely data-driven and
+   * avoid any extra hook invocation overhead in the renderer.
+   * Defaults to 30 when not provided (backward-compatible).
+   */
+  fps?: number;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -50,6 +57,7 @@ function BadgePlaceholder({
         justifyContent: 'center',
         transform: `scale(${scale})`,
         opacity,
+        flexShrink: 0,
       }}
     >
       <span style={{ fontFamily: 'system-ui, sans-serif', fontSize: 16, color: 'rgba(255,255,255,0.3)' }}>
@@ -69,9 +77,9 @@ export const IntroCard: React.FC<IntroCardProps> = ({
   imageUrl,
   backgroundColor = '#0a0a0f',
   durationFrames,
+  fps: fpsProp = 30,
 }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
 
   // ── Overall card fade-in/out ───────────────────────────────────────────────
   const cardOpacity = interpolate(
@@ -89,14 +97,14 @@ export const IntroCard: React.FC<IntroCardProps> = ({
   // Badges: spring scale (0.72 → 1) with slight stagger
   const homeBadgeScale = spring({
     frame: animFrame,
-    fps,
+    fps: fpsProp,
     config: { damping: 18, stiffness: 160, mass: 0.9 },
     from: 0.72,
     to: 1,
   });
   const awayBadgeScale = spring({
     frame: Math.max(0, animFrame - 3),   // 3-frame stagger at 30fps ≈ 0.1 s
-    fps,
+    fps: fpsProp,
     config: { damping: 18, stiffness: 160, mass: 0.9 },
     from: 0.72,
     to: 1,
@@ -173,10 +181,20 @@ export const IntroCard: React.FC<IntroCardProps> = ({
           alignItems: 'flex-start',
           gap: 56,
           marginBottom: 32,
+          width: '100%',
+          justifyContent: 'center',
         }}
       >
         {/* Home team */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 14,
+            width: 220,
+          }}
+        >
           {effectiveHomeBadge ? (
             <Img
               src={effectiveHomeBadge}
@@ -189,11 +207,13 @@ export const IntroCard: React.FC<IntroCardProps> = ({
                 background: 'rgba(255,255,255,0.03)',
                 transform: `scale(${homeBadgeScale})`,
                 opacity: homeBadgeOpacity,
+                flexShrink: 0,
               }}
             />
           ) : (
             <BadgePlaceholder label="Home" scale={homeBadgeScale} opacity={homeBadgeOpacity} />
           )}
+          {/* Team name: wraps rather than truncates */}
           <span
             style={{
               fontFamily: 'system-ui, sans-serif',
@@ -201,11 +221,12 @@ export const IntroCard: React.FC<IntroCardProps> = ({
               fontWeight: 700,
               color: 'rgba(255,255,255,0.92)',
               textAlign: 'center',
-              maxWidth: 160,
-              lineHeight: 1.25,
+              lineHeight: 1.3,
               letterSpacing: 0.3,
               opacity: homeLabelOpacity,
               transform: `translateY(${homeLabelY}px)`,
+              wordBreak: 'break-word',
+              overflowWrap: 'anywhere',
             }}
           >
             {homeName}
@@ -219,6 +240,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
             alignItems: 'center',
             justifyContent: 'center',
             paddingTop: 80,
+            flexShrink: 0,
             opacity: vsOpacity,
           }}
         >
@@ -238,7 +260,15 @@ export const IntroCard: React.FC<IntroCardProps> = ({
 
         {/* Away team */}
         {hasBothBadges && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 14,
+              width: 220,
+            }}
+          >
             {effectiveAwayBadge ? (
               <Img
                 src={effectiveAwayBadge}
@@ -251,11 +281,13 @@ export const IntroCard: React.FC<IntroCardProps> = ({
                   background: 'rgba(255,255,255,0.03)',
                   transform: `scale(${awayBadgeScale})`,
                   opacity: awayBadgeOpacity,
+                  flexShrink: 0,
                 }}
               />
             ) : (
               <BadgePlaceholder label="Away" scale={awayBadgeScale} opacity={awayBadgeOpacity} />
             )}
+            {/* Team name: wraps rather than truncates */}
             <span
               style={{
                 fontFamily: 'system-ui, sans-serif',
@@ -263,11 +295,12 @@ export const IntroCard: React.FC<IntroCardProps> = ({
                 fontWeight: 700,
                 color: 'rgba(255,255,255,0.92)',
                 textAlign: 'center',
-                maxWidth: 160,
-                lineHeight: 1.25,
+                lineHeight: 1.3,
                 letterSpacing: 0.3,
                 opacity: awayLabelOpacity,
                 transform: `translateY(${awayLabelY}px)`,
+                wordBreak: 'break-word',
+                overflowWrap: 'anywhere',
               }}
             >
               {awayName}
@@ -340,7 +373,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
         </span>
       </div>
 
-      {/* Single-badge / legacy layout (no away badge) */}
+      {/* Legacy: title-only mode (no badges at all) */}
       {!hasBothBadges && !effectiveHomeBadge && !effectiveAwayBadge && (
         <h1
           style={{

@@ -225,7 +225,7 @@ export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
       {/* Intro card — skipped entirely when durationSeconds is 0 (disabled in editor) */}
       {introDurationFrames > 0 && (
         <Sequence from={0} durationInFrames={introDurationFrames} name="Intro">
-          <IntroCard {...props.intro} durationFrames={introDurationFrames} />
+          <IntroCard {...props.intro} durationFrames={introDurationFrames} fps={fps} />
         </Sequence>
       )}
 
