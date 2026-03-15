@@ -29,23 +29,49 @@ const REMOTION_CONCURRENCY = Number(process.env.REMOTION_CONCURRENCY ?? 1)
 const REMOTION_FRAME_TIMEOUT_MS = Number(process.env.REMOTION_FRAME_TIMEOUT_MS ?? 60_000)
 
 /**
- * Maximum RAM Remotion's OffthreadVideo compositor may use for its decoded-
- * frame cache. Without a cap the cache is unbounded and will OOM-kill the
- * compositor process (SIGKILL) on memory-constrained hosts (Railway, Fly, etc.).
+ * Maximum RAM Remotion's OffthreadVideo off-thread server may use for its
+ * decoded-frame cache. Without a cap the cache is unbounded and will OOM-kill
+ * the compositor process (SIGKILL) on memory-constrained hosts (Railway, Fly).
+ *
+ * NOTE: this cap controls only the in-Node.js frame buffer.  The compositor
+ * subprocess (Rust + FFmpeg) and headless Chrome each allocate their own
+ * memory on top of this.  On Railway's 512 MB starter plan the full budget is:
+ *
+ *   Node.js process     ~150 MB
+ *   Frame cache         this setting
+ *   Compositor (FFmpeg)  ~80–200 MB  (capped further by REMOTION_VIDEO_THREADS)
+ *   Headless Chrome      ~150–250 MB
+ *
+ * Keep this small (default 32 MB) to leave headroom for the compositor and
+ * Chrome.  Increase only on instances with ≥1 GB RAM.
  *
  * Sizing guide:
  *   • 1 decoded 1080p frame ≈ 8 MB  (1920 × 1080 × 4 bytes)
- *   • 1 decoded  720p frame ≈ 3.5 MB
+ *   •  32 MB ≈  4 frames of 1080p warm
+ *   • 128 MB ≈ 15 frames of 1080p warm
  *
- * Default 128 MB keeps ~15 frames of 1080p footage warm — enough to avoid
- * redundant re-decodes across the sliding window while staying well under
- * the 512 MB Railway starter plan limit.
- *
- * Increase on instances with more RAM:
- *   REMOTION_VIDEO_CACHE_MB=512  →  512 MB cache (~60 frames of 1080p)
+ * Override: REMOTION_VIDEO_CACHE_MB=128
  */
 const REMOTION_VIDEO_CACHE_BYTES =
-  (Number(process.env.REMOTION_VIDEO_CACHE_MB ?? 128)) * 1024 * 1024
+  (Number(process.env.REMOTION_VIDEO_CACHE_MB ?? 32)) * 1024 * 1024
+
+/**
+ * Number of FFmpeg threads the OffthreadVideo compositor may use per clip.
+ *
+ * Remotion's compositor binary runs FFmpeg in a subprocess.  FFmpeg defaults
+ * to spawning one thread per logical CPU core, each of which holds its own
+ * decode buffer (~10–30 MB for 1080p H.264).  On a constrained host this
+ * multiplies peak RSS significantly.
+ *
+ * Setting this to 1 forces single-threaded decoding: slower per-frame but
+ * dramatically lower peak RSS.  For a sequential render (concurrency = 1)
+ * single-threaded decoding adds negligible wall-clock time because frames are
+ * produced one at a time anyway.
+ *
+ * Override: REMOTION_VIDEO_THREADS=4  (on a 4 GB+ host)
+ */
+const REMOTION_VIDEO_THREADS =
+  Number(process.env.REMOTION_VIDEO_THREADS ?? 1)
 
 /** Only emit an onProgress log/callback every N percentage points to reduce noise. */
 const PROGRESS_THROTTLE_PCT = 5
@@ -137,6 +163,11 @@ export async function renderProjectToMp4({
     // which exhausts memory on restricted hosts (512 MB Railway containers).
     // Frames beyond the cap are evicted and re-decoded on demand.
     offthreadVideoCacheSizeInBytes: REMOTION_VIDEO_CACHE_BYTES,
+    // Limit FFmpeg thread count inside the compositor subprocess.
+    // Each FFmpeg thread holds its own decode buffer (~10–30 MB for 1080p H.264);
+    // single-threaded decoding keeps compositor RSS ~80 MB vs ~300 MB at default.
+    // At concurrency=1 there is no throughput penalty since frames are sequential.
+    offthreadVideoThreads: REMOTION_VIDEO_THREADS,
     onProgress: ({ progress }) => {
       const pct = Math.floor(progress * 100)
 
