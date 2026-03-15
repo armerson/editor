@@ -816,6 +816,20 @@ export default function App() {
               </div>
             </div>
 
+            {/* Timeline */}
+            <div className="mx-auto mt-3 w-full max-w-2xl">
+              <div className="mb-1.5 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-neutral-200">Timeline</h2>
+                <p className="text-xs text-neutral-500">
+                  {clips.length === 0 ? "Upload clips to build your reel" : "Drag to reorder · handles to trim · ⚽ goals"}
+                </p>
+              </div>
+              <TimelineTrack clips={clips} goals={goals} selectedClipId={selectedClipId}
+                currentReelTime={currentReelTime} introDurationSeconds={effectiveIntroDuration}
+                onSelectClip={handleSelectClip} onReorder={handleReorderClips}
+                onTrimClip={updateClipTrim} />
+            </div>
+
             {/* Clip settings */}
             {selectedClip && (
               <div className="mx-auto mt-4 w-full max-w-2xl rounded-xl border border-neutral-800 bg-neutral-900 p-4">
@@ -953,19 +967,6 @@ export default function App() {
               <RenderPanel renderState={renderState}
                 onReset={() => setRenderState({ status: "idle", jobId: null, progress: 0, downloadUrl: null, error: null })} />
             </div>
-          </div>
-
-          {/* Timeline */}
-          <div className="shrink-0 border-t border-neutral-800 bg-neutral-950 px-5 py-4">
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-neutral-200">Timeline</h2>
-              <p className="text-xs text-neutral-500">
-                {clips.length === 0 ? "Upload clips to build your reel" : "Drag clips to reorder · ⚽ marks goal positions"}
-              </p>
-            </div>
-            <TimelineTrack clips={clips} goals={goals} selectedClipId={selectedClipId}
-              currentReelTime={currentReelTime} introDurationSeconds={effectiveIntroDuration}
-              onSelectClip={handleSelectClip} onReorder={handleReorderClips} />
           </div>
 
           {/* Music */}

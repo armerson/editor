@@ -13,7 +13,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import type { Clip, ClipRole, GoalEvent } from "../types"
 
 function formatTime(seconds: number): string {
@@ -49,15 +49,66 @@ const ROLE_BADGE: Record<Exclude<ClipRole, "normal">, { label: string; cls: stri
   outro: { label: "OUT", cls: "bg-purple-500/80 text-white" },
 }
 
+// ── Trim handle ───────────────────────────────────────────────────────────────
+
+type TrimHandleProps = {
+  side: "left" | "right"
+  clip: Clip
+  pxPerSec: number
+  onTrim: (clipId: string, trimStart: number, trimEnd: number) => void
+}
+
+function TrimHandle({ side, clip, pxPerSec, onTrim }: TrimHandleProps) {
+  const dragRef = useRef<{ startX: number; startTrim: number } | null>(null)
+
+  return (
+    <div
+      className={`absolute top-0 bottom-0 z-20 flex w-2.5 items-center justify-center ${
+        side === "left" ? "left-0" : "right-0"
+      } cursor-ew-resize`}
+      onPointerDown={(e) => {
+        e.stopPropagation()
+        e.currentTarget.setPointerCapture(e.pointerId)
+        dragRef.current = {
+          startX: e.clientX,
+          startTrim: side === "left" ? clip.trimStart : clip.trimEnd,
+        }
+      }}
+      onPointerMove={(e) => {
+        if (!dragRef.current) return
+        const dSec = (e.clientX - dragRef.current.startX) / pxPerSec
+        if (side === "left") {
+          const newStart = Math.max(0, Math.min(dragRef.current.startTrim + dSec, clip.trimEnd - 0.5))
+          onTrim(clip.id, newStart, clip.trimEnd)
+        } else {
+          const newEnd = Math.max(clip.trimStart + 0.5, Math.min(clip.duration, dragRef.current.startTrim + dSec))
+          onTrim(clip.id, clip.trimStart, newEnd)
+        }
+      }}
+      onPointerUp={(e) => {
+        dragRef.current = null
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="h-full w-0.5 rounded-full bg-yellow-400/80" />
+    </div>
+  )
+}
+
+// ── Single sortable clip cell ─────────────────────────────────────────────────
+
 type ClipCellProps = {
   clip: Clip
   isSelected: boolean
   hasGoals: boolean
   widthPx: number
+  pxPerSec: number
   onSelect: (id: string) => void
+  onTrim: (clipId: string, trimStart: number, trimEnd: number) => void
 }
 
-function ClipCell({ clip, isSelected, hasGoals, widthPx, onSelect }: ClipCellProps) {
+function ClipCell({ clip, isSelected, hasGoals, widthPx, pxPerSec, onSelect, onTrim }: ClipCellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: clip.id })
 
@@ -127,6 +178,10 @@ function ClipCell({ clip, isSelected, hasGoals, widthPx, onSelect }: ClipCellPro
           {formatTime(trimmedDuration)}
         </div>
       </div>
+
+      {/* Trim handles — only visible on hover/selection */}
+      <TrimHandle side="left" clip={clip} pxPerSec={pxPerSec} onTrim={onTrim} />
+      <TrimHandle side="right" clip={clip} pxPerSec={pxPerSec} onTrim={onTrim} />
     </button>
   )
 }
@@ -164,6 +219,7 @@ type Props = {
   introDurationSeconds: number
   onSelectClip: (id: string) => void
   onReorder: (from: number, to: number) => void
+  onTrimClip: (clipId: string, trimStart: number, trimEnd: number) => void
 }
 
 const MIN_PX_PER_SEC = 20
@@ -178,6 +234,7 @@ export function TimelineTrack({
   introDurationSeconds,
   onSelectClip,
   onReorder,
+  onTrimClip,
 }: Props) {
   const [pxPerSec, setPxPerSec] = useState(DEFAULT_PX_PER_SEC)
 
@@ -292,7 +349,9 @@ export function TimelineTrack({
                       isSelected={selectedClipId === clip.id}
                       hasGoals={hasGoals}
                       widthPx={widthPx}
+                      pxPerSec={pxPerSec}
                       onSelect={onSelectClip}
+                      onTrim={onTrimClip}
                     />
                   )
                 })}
