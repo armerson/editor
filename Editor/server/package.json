@@ -16,13 +16,16 @@
     "@google-cloud/storage": "^7.19.0",
     "@remotion/bundler": "^4.0.435",
     "@remotion/renderer": "^4.0.435",
+    "better-sqlite3": "^12.8.0",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "pino": "^10.3.1",
     "remotion": "^4.0.435",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^25.5.0",

@@ -4,8 +4,16 @@ import { bundle } from "@remotion/bundler"
 import { renderMedia, selectComposition } from "@remotion/renderer"
 import type { Project } from "./projectSchema"
 import { localRenderedPath } from "./storageUploader"
+import { logger } from "./logger"
 
+/** Cached bundle — rebuilt only when the process restarts. */
 let cachedBundle: { serveUrl: string } | null = null
+
+/** Default: 20 minutes. Override with RENDER_TIMEOUT_MS env var. */
+const RENDER_TIMEOUT_MS = Number(process.env.RENDER_TIMEOUT_MS ?? 20 * 60 * 1000)
+
+/** Only emit an onProgress log/callback every N percentage points to reduce noise. */
+const PROGRESS_THROTTLE_PCT = 5
 
 type RenderParams = {
   jobId: string
@@ -16,16 +24,26 @@ type RenderParams = {
 
 function mustGetEnv(name: string): string {
   const v = process.env[name]
-  if (!v) throw new Error(`Missing env var: ${name}`)
+  if (!v) throw new Error(`Missing required env var: ${name}`)
   return v
+}
+
+function makeTimeoutPromise(ms: number, jobId: string): Promise<never> {
+  return new Promise((_, reject) =>
+    setTimeout(
+      () => reject(new Error(`Render timed out after ${ms / 1000}s (job ${jobId})`)),
+      ms
+    )
+  )
 }
 
 /**
  * Bundles the Remotion project once per process, then renders to MP4.
  *
  * Env:
- * - REMOTION_ROOT: path to the Remotion project folder (e.g. "../renderer")
- * - REMOTION_COMPOSITION_ID: the composition id to render (e.g. "HighlightReel")
+ * - REMOTION_ROOT             Absolute path to the Renderer project folder
+ * - REMOTION_COMPOSITION_ID   Composition id to render (default: "HighlightReel")
+ * - RENDER_TIMEOUT_MS         Max ms allowed for a render (default: 1 200 000 = 20 min)
  */
 export async function renderProjectToMp4({
   jobId,
@@ -39,18 +57,23 @@ export async function renderProjectToMp4({
   await fs.mkdir(rendersDir, { recursive: true })
   const outPath = localRenderedPath(rendersDir, jobId)
 
+  // ── Bundle (cached per process) ──────────────────────────────────────────
   if (!cachedBundle) {
     const entryPoint = path.join(remotionRoot, "src", "index.ts")
-    console.log("[render] bundling Remotion project:", { remotionRoot, entryPoint })
-    const serveUrl = await bundle(entryPoint, undefined, {
+    logger.info({ remotionRoot, entryPoint }, "bundling Remotion project")
+
+    const serveUrl = await bundle(entryPoint, (progress) => {
+      logger.debug({ bundle_progress: Math.round(progress * 100) }, "bundle progress")
+    }, {
       outDir: path.join(remotionRoot, ".remotion-bundle"),
     })
+
     cachedBundle = { serveUrl }
-    console.log("[render] bundle ready:", { serveUrl })
+    logger.info({ serveUrl }, "bundle ready")
   }
 
-  // Pass project props flat — Root.tsx's calculateMetadata expects ProjectJson directly,
-  // not wrapped in { project: ... }.
+  // ── Select composition ───────────────────────────────────────────────────
+  // Pass props flat — Root.tsx calculateMetadata expects ProjectJson directly.
   const inputProps = project
   const composition = await selectComposition({
     serveUrl: cachedBundle.serveUrl,
@@ -58,17 +81,39 @@ export async function renderProjectToMp4({
     inputProps,
   })
 
-  console.log("[render] renderMedia starting:", { compositionId, outPath })
-  await renderMedia({
+  logger.info({ jobId, compositionId, outPath }, "render starting")
+
+  // ── Render with timeout ───────────────────────────────────────────────────
+  let lastReportedPct = -1
+
+  const renderPromise = renderMedia({
     serveUrl: cachedBundle.serveUrl,
     composition,
     codec: "h264",
     outputLocation: outPath,
     inputProps,
-    onProgress: ({ progress }) => onProgress?.(progress),
+    onProgress: ({ progress }) => {
+      const pct = Math.floor(progress * 100)
+
+      // Throttle: only fire callback and log every PROGRESS_THROTTLE_PCT points.
+      if (pct - lastReportedPct >= PROGRESS_THROTTLE_PCT || pct === 100) {
+        lastReportedPct = pct
+        logger.debug({ jobId, progress_pct: pct }, "render progress")
+        onProgress?.(progress)
+      }
+    },
   })
 
-  console.log("[render] renderMedia done:", { outPath })
+  await Promise.race([
+    renderPromise,
+    makeTimeoutPromise(RENDER_TIMEOUT_MS, jobId),
+  ])
+
+  logger.info({ jobId, outPath }, "render complete")
   return { localMp4Path: outPath }
 }
 
+/** Invalidate the bundle cache (useful for testing or forced re-bundle). */
+export function clearBundleCache(): void {
+  cachedBundle = null
+}
