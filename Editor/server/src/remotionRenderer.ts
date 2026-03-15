@@ -28,6 +28,25 @@ const REMOTION_CONCURRENCY = Number(process.env.REMOTION_CONCURRENCY ?? 1)
  */
 const REMOTION_FRAME_TIMEOUT_MS = Number(process.env.REMOTION_FRAME_TIMEOUT_MS ?? 60_000)
 
+/**
+ * Maximum RAM Remotion's OffthreadVideo compositor may use for its decoded-
+ * frame cache. Without a cap the cache is unbounded and will OOM-kill the
+ * compositor process (SIGKILL) on memory-constrained hosts (Railway, Fly, etc.).
+ *
+ * Sizing guide:
+ *   • 1 decoded 1080p frame ≈ 8 MB  (1920 × 1080 × 4 bytes)
+ *   • 1 decoded  720p frame ≈ 3.5 MB
+ *
+ * Default 128 MB keeps ~15 frames of 1080p footage warm — enough to avoid
+ * redundant re-decodes across the sliding window while staying well under
+ * the 512 MB Railway starter plan limit.
+ *
+ * Increase on instances with more RAM:
+ *   REMOTION_VIDEO_CACHE_MB=512  →  512 MB cache (~60 frames of 1080p)
+ */
+const REMOTION_VIDEO_CACHE_BYTES =
+  (Number(process.env.REMOTION_VIDEO_CACHE_MB ?? 128)) * 1024 * 1024
+
 /** Only emit an onProgress log/callback every N percentage points to reduce noise. */
 const PROGRESS_THROTTLE_PCT = 5
 
@@ -113,6 +132,11 @@ export async function renderProjectToMp4({
     concurrency: REMOTION_CONCURRENCY,
     // Give each frame more time to decode remote video (Firebase Storage).
     timeoutInMilliseconds: REMOTION_FRAME_TIMEOUT_MS,
+    // Cap the OffthreadVideo decoded-frame cache to prevent SIGKILL OOM.
+    // Without this limit Remotion holds every decoded frame in RAM forever,
+    // which exhausts memory on restricted hosts (512 MB Railway containers).
+    // Frames beyond the cap are evicted and re-decoded on demand.
+    offthreadVideoCacheSizeInBytes: REMOTION_VIDEO_CACHE_BYTES,
     onProgress: ({ progress }) => {
       const pct = Math.floor(progress * 100)
 
