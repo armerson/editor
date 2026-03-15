@@ -73,6 +73,7 @@ export default function App() {
   const [clipAudioOn, setClipAudioOn] = useState(true)
   const [goals, setGoals] = useState<GoalEvent[]>([])
   const [pendingGoal, setPendingGoal] = useState<{ clipId: string; timeInClip: number } | null>(null)
+  const [autoTrimOnGoal, setAutoTrimOnGoal] = useState(true)
   const [videoCurrentTime, setVideoCurrentTime] = useState(0)
   const [goalScorerSide, setGoalScorerSide] = useState<"home" | "away">("home")
   const [goalScorerName, setGoalScorerName] = useState("")
@@ -109,6 +110,9 @@ export default function App() {
   const musicVolumeRef = useRef(musicVolume)
   musicVolumeRef.current = musicVolume
   isPlayingReelRef.current = isPlayingReel
+  // Stable ref to the latest handleGoalClick — used by keyboard shortcut effect
+  // so it never needs to be torn down and re-registered.
+  const handleGoalClickRef = useRef<(() => void) | null>(null)
 
   // Real-time validation drives the Render button disabled state
   const validationErrors = useMemo(
@@ -411,11 +415,40 @@ export default function App() {
     setPendingGoal({ clipId: selectedClip.id, timeInClip: videoRef.current.currentTime })
     setGoalScorerSide("home"); setGoalScorerName("")
   }
+  // Keep ref in sync so the keyboard handler always calls the latest version
+  handleGoalClickRef.current = handleGoalClick
+
+  /** Open the goal dialog for whichever clip lives at `reelTimeSec`. */
+  const handleAddGoalAtReelTime = (reelTimeSec: number) => {
+    if (reelTimeSec < effectiveIntroDuration) return // inside intro card
+    let t = effectiveIntroDuration
+    for (const clip of clips) {
+      const clipDur = Math.max(0, clip.trimEnd - clip.trimStart)
+      if (reelTimeSec >= t && reelTimeSec < t + clipDur) {
+        const isNormal = !clip.role || clip.role === "normal"
+        if (!isNormal) return // no goals on intro/outro clips
+        const timeInClip = clip.trimStart + (reelTimeSec - t)
+        setPendingGoal({ clipId: clip.id, timeInClip })
+        setGoalScorerSide("home"); setGoalScorerName("")
+        return
+      }
+      t += clipDur
+    }
+  }
 
   const handleGoalSubmit = () => {
     if (!pendingGoal) return
     setGoals((prev) => [...prev, { id: crypto.randomUUID(), clipId: pendingGoal.clipId,
       timeInClip: pendingGoal.timeInClip, side: goalScorerSide, scorerName: goalScorerName.trim() || "Unknown" }])
+    // Optional auto-trim: centre the clip on [goalTime-4s, goalTime+2s]
+    if (autoTrimOnGoal) {
+      const clip = clips.find((c) => c.id === pendingGoal.clipId)
+      if (clip) {
+        const newStart = Math.max(0, pendingGoal.timeInClip - 4)
+        const newEnd = Math.min(clip.duration, pendingGoal.timeInClip + 2)
+        if (newEnd > newStart) updateClipTrim(clip.id, newStart, newEnd)
+      }
+    }
     setPendingGoal(null); setGoalScorerName("")
   }
 
@@ -687,6 +720,22 @@ export default function App() {
     videoRef.current.volume = (clipAudioOn && !(selectedClip?.muteAudio ?? false)) ? 1 : 0
   }, [clipAudioOn, selectedClip?.id, selectedClip?.muteAudio])
 
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────────
+
+  // G / g — add goal at current playhead position (mirrors the ⚽ GOAL button)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== "g" && e.key !== "G") return
+      // Don't fire when user is typing in a form field
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement).isContentEditable) return
+      if (pendingGoal) return // dialog already open
+      handleGoalClickRef.current?.()
+    }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [pendingGoal]) // re-register only when dialog open/closes
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -714,6 +763,20 @@ export default function App() {
                 className="w-full rounded-lg border border-neutral-600 bg-neutral-800 px-3 py-2 text-sm text-white placeholder-neutral-500"
                 onKeyDown={(e) => { if (e.key === "Enter") handleGoalSubmit(); if (e.key === "Escape") handleGoalCancel() }} />
             </div>
+            <label className="mb-4 flex cursor-pointer items-start gap-2">
+              <input type="checkbox" checked={autoTrimOnGoal}
+                onChange={(e) => setAutoTrimOnGoal(e.target.checked)}
+                className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded accent-yellow-500" />
+              <span className="text-xs text-neutral-400">
+                Auto-trim clip to{" "}
+                <span className="tabular-nums text-neutral-300">
+                  {Math.max(0, (pendingGoal?.timeInClip ?? 0) - 4).toFixed(1)}s
+                  {" – "}
+                  {((pendingGoal?.timeInClip ?? 0) + 2).toFixed(1)}s
+                </span>
+                {" "}around goal
+              </span>
+            </label>
             <div className="flex gap-2">
               <button type="button" onClick={handleGoalCancel} className="rounded-lg border border-neutral-600 bg-neutral-800 px-4 py-2 text-sm hover:bg-neutral-700">Cancel</button>
               <button type="button" onClick={handleGoalSubmit} className="flex-1 rounded-lg bg-yellow-500 px-4 py-2 text-sm font-semibold text-black hover:bg-yellow-400">Record goal</button>
@@ -974,13 +1037,15 @@ export default function App() {
               <div className="mb-1.5 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-neutral-200">Timeline</h2>
                 <p className="text-xs text-neutral-500">
-                  {clips.length === 0 ? "Upload clips to build your reel" : "Drag to reorder · handles to trim · ⚽ goals"}
+                  {clips.length === 0
+                    ? "Upload clips to build your reel"
+                    : "Drag to reorder · handles to trim · click to add ⚽ · G key"}
                 </p>
               </div>
               <TimelineTrack clips={clips} goals={goals} selectedClipId={selectedClipId}
                 currentReelTime={currentReelTime} introDurationSeconds={effectiveIntroDuration}
                 onSelectClip={handleSelectClip} onReorder={handleReorderClips}
-                onTrimClip={updateClipTrim} />
+                onTrimClip={updateClipTrim} onAddGoalAtReelTime={handleAddGoalAtReelTime} />
             </div>
 
             {/* Clip settings */}
@@ -1034,27 +1099,6 @@ export default function App() {
                     onChange={(e) => setClipMuteAudio(selectedClip.id, e.target.checked)}
                     className="h-3.5 w-3.5 rounded accent-yellow-500" />
                 </label>
-
-                {/* Trim */}
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    { label: "Trim Start (s)", min: 0, max: selectedClip.trimEnd, value: selectedClip.trimStart,
-                      onChange: (v: number) => updateClipTrim(selectedClip.id, v, Math.max(v, selectedClip.trimEnd)) },
-                    { label: "Trim End (s)", min: selectedClip.trimStart, max: selectedClip.duration, value: selectedClip.trimEnd,
-                      onChange: (v: number) => updateClipTrim(selectedClip.id, selectedClip.trimStart, v) },
-                  ].map(({ label, min, max, value, onChange }) => (
-                    <div key={label}>
-                      <label className="mb-1 block text-xs text-neutral-400">{label}</label>
-                      <div className="flex gap-2">
-                        <input type="range" min={min} max={max} step={0.1} value={value}
-                          onChange={(e) => onChange(parseFloat(e.target.value))} className="h-2 flex-1 accent-yellow-500" />
-                        <input type="number" min={min} max={max} step={0.1} value={value.toFixed(1)}
-                          onChange={(e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) onChange(Math.max(min, Math.min(v, max))) }}
-                          className="w-16 rounded border border-neutral-700 bg-neutral-800 px-2 py-1 text-xs text-white" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
 
                 {/* Scoreboard — only for normal clips */}
                 {isNormalClip && (

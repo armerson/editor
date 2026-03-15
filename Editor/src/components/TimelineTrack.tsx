@@ -13,7 +13,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { useRef, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import type { Clip, ClipRole, GoalEvent } from "../types"
 
 function formatTime(seconds: number): string {
@@ -49,16 +49,30 @@ const ROLE_BADGE: Record<Exclude<ClipRole, "normal">, { label: string; cls: stri
   outro: { label: "OUT", cls: "bg-purple-500/80 text-white" },
 }
 
+// ── Snapping ──────────────────────────────────────────────────────────────────
+
+/** Seconds within which a dragged trim handle will snap to a target value. */
+const SNAP_THRESHOLD_S = 0.3
+
+function snapToTargets(value: number, targets: number[]): number {
+  for (const t of targets) {
+    if (Math.abs(value - t) <= SNAP_THRESHOLD_S) return t
+  }
+  return value
+}
+
 // ── Trim handle ───────────────────────────────────────────────────────────────
 
 type TrimHandleProps = {
   side: "left" | "right"
   clip: Clip
   pxPerSec: number
+  /** Goal times (in clip seconds) used as extra snap targets. */
+  goalTimesInClip: number[]
   onTrim: (clipId: string, trimStart: number, trimEnd: number) => void
 }
 
-function TrimHandle({ side, clip, pxPerSec, onTrim }: TrimHandleProps) {
+function TrimHandle({ side, clip, pxPerSec, goalTimesInClip, onTrim }: TrimHandleProps) {
   const dragRef = useRef<{ startX: number; startTrim: number } | null>(null)
 
   return (
@@ -78,10 +92,16 @@ function TrimHandle({ side, clip, pxPerSec, onTrim }: TrimHandleProps) {
         if (!dragRef.current) return
         const dSec = (e.clientX - dragRef.current.startX) / pxPerSec
         if (side === "left") {
-          const newStart = Math.max(0, Math.min(dragRef.current.startTrim + dSec, clip.trimEnd - 0.5))
+          // Snap to 0 (clip start) and any goal times in this clip
+          const raw = dragRef.current.startTrim + dSec
+          const snapped = snapToTargets(raw, [0, ...goalTimesInClip])
+          const newStart = Math.max(0, Math.min(snapped, clip.trimEnd - 0.5))
           onTrim(clip.id, newStart, clip.trimEnd)
         } else {
-          const newEnd = Math.max(clip.trimStart + 0.5, Math.min(clip.duration, dragRef.current.startTrim + dSec))
+          // Snap to clip natural end and any goal times in this clip
+          const raw = dragRef.current.startTrim + dSec
+          const snapped = snapToTargets(raw, [clip.duration, ...goalTimesInClip])
+          const newEnd = Math.max(clip.trimStart + 0.5, Math.min(clip.duration, snapped))
           onTrim(clip.id, clip.trimStart, newEnd)
         }
       }}
@@ -104,11 +124,12 @@ type ClipCellProps = {
   hasGoals: boolean
   widthPx: number
   pxPerSec: number
+  goalTimesInClip: number[]
   onSelect: (id: string) => void
   onTrim: (clipId: string, trimStart: number, trimEnd: number) => void
 }
 
-function ClipCell({ clip, isSelected, hasGoals, widthPx, pxPerSec, onSelect, onTrim }: ClipCellProps) {
+function ClipCell({ clip, isSelected, hasGoals, widthPx, pxPerSec, goalTimesInClip, onSelect, onTrim }: ClipCellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: clip.id })
 
@@ -127,7 +148,7 @@ function ClipCell({ clip, isSelected, hasGoals, widthPx, pxPerSec, onSelect, onT
       ref={setNodeRef}
       style={style}
       type="button"
-      onClick={() => onSelect(clip.id)}
+      onClick={(e) => { e.stopPropagation(); onSelect(clip.id) }}
       className={`group relative flex shrink-0 flex-col overflow-hidden rounded-lg border transition-colors ${
         isSelected
           ? "border-yellow-500 ring-1 ring-yellow-500/40"
@@ -180,8 +201,8 @@ function ClipCell({ clip, isSelected, hasGoals, widthPx, pxPerSec, onSelect, onT
       </div>
 
       {/* Trim handles — only visible on hover/selection */}
-      <TrimHandle side="left" clip={clip} pxPerSec={pxPerSec} onTrim={onTrim} />
-      <TrimHandle side="right" clip={clip} pxPerSec={pxPerSec} onTrim={onTrim} />
+      <TrimHandle side="left" clip={clip} pxPerSec={pxPerSec} goalTimesInClip={goalTimesInClip} onTrim={onTrim} />
+      <TrimHandle side="right" clip={clip} pxPerSec={pxPerSec} goalTimesInClip={goalTimesInClip} onTrim={onTrim} />
     </button>
   )
 }
@@ -220,6 +241,9 @@ type Props = {
   onSelectClip: (id: string) => void
   onReorder: (from: number, to: number) => void
   onTrimClip: (clipId: string, trimStart: number, trimEnd: number) => void
+  /** If provided, clicking the timeline background at a time position opens the
+   *  goal dialog at that reel position. */
+  onAddGoalAtReelTime?: (reelTimeSec: number) => void
 }
 
 const MIN_PX_PER_SEC = 20
@@ -235,12 +259,24 @@ export function TimelineTrack({
   onSelectClip,
   onReorder,
   onTrimClip,
+  onAddGoalAtReelTime,
 }: Props) {
   const [pxPerSec, setPxPerSec] = useState(DEFAULT_PX_PER_SEC)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   )
+
+  // Map clipId → goal times (in clip seconds) for snapping and ClipCell badge
+  const goalTimesByClip = useMemo(() => {
+    const m = new Map<string, number[]>()
+    for (const g of goals) {
+      const existing = m.get(g.clipId) ?? []
+      existing.push(g.timeInClip)
+      m.set(g.clipId, existing)
+    }
+    return m
+  }, [goals])
 
   const introDuration = introDurationSeconds
   const clipsTrimmedDuration = clips.reduce(
@@ -295,8 +331,15 @@ export function TimelineTrack({
 
       <div className="overflow-x-auto pb-2">
       <div
-        className="relative"
+        className={`relative${onAddGoalAtReelTime ? " cursor-crosshair" : ""}`}
         style={{ width: timelineWidthPx, minWidth: "100%" }}
+        onClick={(e) => {
+          if (!onAddGoalAtReelTime || totalReelDuration <= 0) return
+          const rect = e.currentTarget.getBoundingClientRect()
+          const offsetX = e.clientX - rect.left
+          const reelTimeSec = (offsetX / timelineWidthPx) * totalReelDuration
+          onAddGoalAtReelTime(Math.max(0, Math.min(reelTimeSec, totalReelDuration)))
+        }}
       >
         {/* Time ruler */}
         <div className="relative mb-1 h-5 border-b border-neutral-700 bg-neutral-950">
@@ -350,6 +393,7 @@ export function TimelineTrack({
                       hasGoals={hasGoals}
                       widthPx={widthPx}
                       pxPerSec={pxPerSec}
+                      goalTimesInClip={goalTimesByClip.get(clip.id) ?? []}
                       onSelect={onSelectClip}
                       onTrim={onTrimClip}
                     />
