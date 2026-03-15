@@ -13,7 +13,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import type { Clip, GoalEvent } from "../types"
+import type { Clip, ClipRole, GoalEvent } from "../types"
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60)
@@ -42,6 +42,11 @@ function GripIcon() {
 }
 
 // ── Single sortable clip cell ─────────────────────────────────────────────────
+
+const ROLE_BADGE: Record<Exclude<ClipRole, "normal">, { label: string; cls: string }> = {
+  intro: { label: "IN", cls: "bg-blue-500/80 text-white" },
+  outro: { label: "OUT", cls: "bg-purple-500/80 text-white" },
+}
 
 type ClipCellProps = {
   clip: Clip
@@ -79,6 +84,15 @@ function ClipCell({ clip, isSelected, hasGoals, widthPx, onSelect }: ClipCellPro
       {...attributes}
       {...listeners}
     >
+      {/* Role badge (intro / outro only) */}
+      {clip.role && clip.role !== "normal" && ROLE_BADGE[clip.role] && (
+        <span
+          className={`absolute left-1 top-1 z-10 rounded px-1 text-[8px] font-bold leading-none ${ROLE_BADGE[clip.role].cls}`}
+        >
+          {ROLE_BADGE[clip.role].label}
+        </span>
+      )}
+
       {/* Thumbnail */}
       <div className="relative h-12 w-full overflow-hidden bg-neutral-800">
         {clip.thumbnail ? (

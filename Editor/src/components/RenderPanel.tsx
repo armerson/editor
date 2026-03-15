@@ -48,9 +48,6 @@ export function RenderPanel({ renderState, onReset }: Props) {
           <span className="text-sm font-semibold text-neutral-200">
             {STATUS_LABEL[status] ?? status}
           </span>
-          {status === "rendering" && (
-            <span className="tabular-nums text-sm text-neutral-400">{displayPct}%</span>
-          )}
         </div>
 
         <button
@@ -64,13 +61,43 @@ export function RenderPanel({ renderState, onReset }: Props) {
 
       {/* Progress bar */}
       {(isActive || status === "done") && (
-        <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-neutral-700">
-          <div
-            className={`h-full rounded-full transition-all duration-500 ${
-              status === "done" ? "bg-emerald-500" : "bg-yellow-500"
-            }`}
-            style={{ width: `${status === "done" ? 100 : displayPct}%` }}
-          />
+        <div className="mb-3">
+          <div className="relative h-6 w-full overflow-hidden rounded-lg bg-neutral-700">
+            {/* Filled track */}
+            <div
+              className={`h-full rounded-lg transition-all duration-500 ${
+                status === "done"
+                  ? "bg-emerald-500"
+                  : status === "rendering"
+                  ? "bg-yellow-500"
+                  : "bg-yellow-500/60"
+              }`}
+              style={{
+                width: `${status === "done" ? 100 : status === "submitting" ? 4 : displayPct}%`,
+                minWidth: isActive ? "1.5rem" : undefined,
+              }}
+            />
+            {/* Animated stripe overlay for queued/submitting */}
+            {(status === "submitting" || status === "queued") && (
+              <div
+                className="absolute inset-0 animate-pulse rounded-lg"
+                style={{
+                  background:
+                    "repeating-linear-gradient(45deg, transparent, transparent 8px, rgba(255,255,255,0.06) 8px, rgba(255,255,255,0.06) 16px)",
+                }}
+              />
+            )}
+            {/* Percentage label */}
+            <span className="absolute inset-0 flex items-center justify-center text-xs font-bold tabular-nums text-white drop-shadow">
+              {status === "done"
+                ? "✓ Complete"
+                : status === "submitting"
+                ? "Submitting…"
+                : status === "queued"
+                ? "Queued…"
+                : `${displayPct}%`}
+            </span>
+          </div>
         </div>
       )}
 

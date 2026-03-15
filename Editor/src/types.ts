@@ -1,12 +1,18 @@
 // ── Core domain types ─────────────────────────────────────────────────────────
 
+/** Controls whether a clip shows scoreboard/scorer/goal overlay. */
+export type ClipRole = "normal" | "intro" | "outro"
+
 export type IntroData = {
   teamName: string
   opponent: string
   score: string
   matchDate: string
   ageGroup: string
-  clubBadgeUrl: string
+  /** Home club badge URL (replaces legacy clubBadgeUrl). */
+  homeBadgeUrl: string
+  /** Away club badge URL. Optional — may be empty. */
+  awayBadgeUrl: string
   durationSeconds: number
 }
 
@@ -37,6 +43,8 @@ export type Clip = {
   showScoreboard: boolean
   minuteMarker: string
   showScorerAfterGoal: boolean
+  /** Defaults to "normal". intro/outro clips never show scoreboard, scorer or GOAL button. */
+  role?: ClipRole
 }
 
 /** Output format preset sent to the renderer */
@@ -57,6 +65,8 @@ export type ProjectData = {
     showScoreboard: boolean
     minuteMarker: string
     showScorerAfterGoal: boolean
+    /** Defaults to "normal" if absent (backward compat). */
+    role?: ClipRole
     src?: string
   }>
   intro: IntroData

@@ -6,6 +6,7 @@ import { getRenderStatus, startRender } from "./lib/renderApi"
 import type {
   AspectRatioPreset,
   Clip,
+  ClipRole,
   GoalEvent,
   IntroData,
   ProjectData,
@@ -39,7 +40,8 @@ const DEFAULT_INTRO: IntroData = {
   score: "",
   matchDate: "",
   ageGroup: "",
-  clubBadgeUrl: "",
+  homeBadgeUrl: "",
+  awayBadgeUrl: "",
   durationSeconds: 2,
 }
 
@@ -86,7 +88,8 @@ export default function App() {
   })
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const badgeInputRef = useRef<HTMLInputElement | null>(null)
+  const homeBadgeInputRef = useRef<HTMLInputElement | null>(null)
+  const awayBadgeInputRef = useRef<HTMLInputElement | null>(null)
   const musicInputRef = useRef<HTMLInputElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -114,6 +117,8 @@ export default function App() {
     renderState.status !== "rendering"
 
   const selectedClip = clips.find((c) => c.id === selectedClipId) ?? clips[0] ?? null
+  /** True when the selected clip is a "normal" gameplay clip (not intro/outro). */
+  const isNormalClip = !selectedClip?.role || selectedClip.role === "normal"
   const totalReelDuration =
     intro.durationSeconds + clips.reduce((s, c) => s + Math.max(0, c.trimEnd - c.trimStart), 0)
 
@@ -133,10 +138,15 @@ export default function App() {
         showScoreboard: c.showScoreboard,
         minuteMarker: c.minuteMarker,
         showScorerAfterGoal: c.showScorerAfterGoal,
+        role: c.role ?? "normal",
         ...(c.url.startsWith("http") ? { src: c.url } : {}),
         ...(c.thumbnail.startsWith("http") ? { thumbnail: c.thumbnail } : {}),
       })),
-      intro: { ...intro, clubBadgeUrl: intro.clubBadgeUrl.startsWith("http") ? intro.clubBadgeUrl : "" },
+      intro: {
+        ...intro,
+        homeBadgeUrl: intro.homeBadgeUrl.startsWith("http") ? intro.homeBadgeUrl : "",
+        awayBadgeUrl: intro.awayBadgeUrl.startsWith("http") ? intro.awayBadgeUrl : "",
+      },
       scoreboard: { ...scoreboard },
       goals: [...goals],
       lowerThird: { defaultShowScoreboard: true, defaultShowScorerAfterGoal: true },
@@ -157,8 +167,21 @@ export default function App() {
   function applyProjectToState(project: ProjectData) {
     setProjectTitle(project.projectTitle)
     setAspectRatio((project.presetId as AspectRatioPreset | undefined) ?? "landscape")
-    setClips(project.clips.map((c) => ({ ...c, url: c.src ?? "", thumbnail: c.thumbnail ?? "" })))
-    setIntro(project.intro)
+    setClips(
+      project.clips.map((c) => ({
+        ...c,
+        url: c.src ?? "",
+        thumbnail: c.thumbnail ?? "",
+        role: (c.role ?? "normal") as ClipRole,
+      }))
+    )
+    // Backward compat: old projects use clubBadgeUrl; map it to homeBadgeUrl.
+    const rawIntro = project.intro as IntroData & { clubBadgeUrl?: string }
+    setIntro({
+      ...rawIntro,
+      homeBadgeUrl: rawIntro.homeBadgeUrl ?? rawIntro.clubBadgeUrl ?? "",
+      awayBadgeUrl: rawIntro.awayBadgeUrl ?? "",
+    })
     setScoreboard(project.scoreboard)
     setGoals(project.goals)
     const musicUrl = project.music.musicUrl
@@ -305,9 +328,12 @@ export default function App() {
       const { thumbnail, duration } = await generateThumbnail(file)
       const safeDuration = Math.max(0, duration)
       const id = crypto.randomUUID()
-      newClips.push({ id, name: file.name, url: URL.createObjectURL(file), thumbnail,
+      newClips.push({
+        id, name: file.name, url: URL.createObjectURL(file), thumbnail,
         duration: safeDuration, trimStart: 0, trimEnd: safeDuration,
-        showScoreboard: true, minuteMarker: "", showScorerAfterGoal: true })
+        showScoreboard: true, minuteMarker: "", showScorerAfterGoal: true,
+        role: "normal" as ClipRole,
+      })
     }
     setClips((prev) => {
       const updated = [...prev, ...newClips]
@@ -357,6 +383,9 @@ export default function App() {
   const setClipShowScorerAfterGoal = (clipId: string, val: boolean) =>
     setClips((prev) => prev.map((c) => c.id === clipId ? { ...c, showScorerAfterGoal: val } : c))
 
+  const setClipRole = (clipId: string, role: ClipRole) =>
+    setClips((prev) => prev.map((c) => c.id === clipId ? { ...c, role } : c))
+
   // ── Goals ──────────────────────────────────────────────────────────────────
 
   const handleGoalClick = () => {
@@ -379,23 +408,36 @@ export default function App() {
 
   // ── Media uploads ──────────────────────────────────────────────────────────
 
-  const handleBadgeUpload = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; if (!file) return
+  const uploadBadge = async (
+    file: File,
+    field: "homeBadgeUrl" | "awayBadgeUrl",
+    e: ChangeEvent<HTMLInputElement>
+  ) => {
     if (isFirebaseConfigured()) {
       try {
         const url = await uploadMediaToStorage("badge", file, crypto.randomUUID())
-        setIntro((prev) => { revokeIfBlobUrl(prev.clubBadgeUrl); return { ...prev, clubBadgeUrl: url } })
+        setIntro((prev) => { revokeIfBlobUrl(prev[field]); return { ...prev, [field]: url } })
         toast("Badge uploaded")
       } catch {
         const url = URL.createObjectURL(file)
-        setIntro((prev) => { revokeIfBlobUrl(prev.clubBadgeUrl); return { ...prev, clubBadgeUrl: url } })
+        setIntro((prev) => { revokeIfBlobUrl(prev[field]); return { ...prev, [field]: url } })
         toast("Badge upload failed – local preview only")
       }
     } else {
       const url = URL.createObjectURL(file)
-      setIntro((prev) => { revokeIfBlobUrl(prev.clubBadgeUrl); return { ...prev, clubBadgeUrl: url } })
+      setIntro((prev) => { revokeIfBlobUrl(prev[field]); return { ...prev, [field]: url } })
     }
     e.target.value = ""
+  }
+
+  const handleHomeBadgeUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return
+    void uploadBadge(file, "homeBadgeUrl", e)
+  }
+
+  const handleAwayBadgeUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return
+    void uploadBadge(file, "awayBadgeUrl", e)
   }
 
   const handleMusicUpload = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -571,7 +613,8 @@ export default function App() {
             </button>
           </div>
           <input ref={fileInputRef} type="file" accept="video/*" multiple className="hidden" onChange={handleFilesSelected} />
-          <input ref={badgeInputRef} type="file" accept="image/*" className="hidden" onChange={handleBadgeUpload} />
+          <input ref={homeBadgeInputRef} type="file" accept="image/*" className="hidden" onChange={handleHomeBadgeUpload} />
+          <input ref={awayBadgeInputRef} type="file" accept="image/*" className="hidden" onChange={handleAwayBadgeUpload} />
           <input ref={musicInputRef} type="file" accept="audio/*" className="hidden" onChange={handleMusicUpload} />
 
           {/* Clip list */}
@@ -589,7 +632,15 @@ export default function App() {
                   )}
                   <div className="flex items-center justify-between px-2 py-1.5">
                     <p className="truncate text-xs font-medium text-neutral-200">{clip.name}</p>
-                    {!clip.url.startsWith("http") && <span className="ml-1 shrink-0 text-[10px] text-orange-400" title="Uploading…">↑</span>}
+                    <div className="ml-1 flex shrink-0 items-center gap-1">
+                      {clip.role === "intro" && (
+                        <span className="rounded bg-blue-500/20 px-1 text-[9px] font-semibold text-blue-400">Intro</span>
+                      )}
+                      {clip.role === "outro" && (
+                        <span className="rounded bg-purple-500/20 px-1 text-[9px] font-semibold text-purple-400">Outro</span>
+                      )}
+                      {!clip.url.startsWith("http") && <span className="text-[10px] text-orange-400" title="Uploading…">↑</span>}
+                    </div>
                   </div>
                 </button>
               ))
@@ -614,14 +665,31 @@ export default function App() {
                     className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-xs text-white placeholder-neutral-600 focus:border-neutral-500 focus:outline-none" />
                 </div>
               ))}
-              <div>
-                <label className="mb-1 block text-[10px] font-medium text-neutral-400">Club badge</label>
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={() => badgeInputRef.current?.click()}
-                    className="rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-xs hover:bg-neutral-700">
-                    {intro.clubBadgeUrl ? "Change" : "Upload"}
-                  </button>
-                  {intro.clubBadgeUrl && <img src={intro.clubBadgeUrl} alt="Badge" className="h-8 w-8 rounded-full border border-neutral-600 object-cover" />}
+              {/* Dual badge upload */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="mb-1 block text-[10px] font-medium text-neutral-400">Home badge</label>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => homeBadgeInputRef.current?.click()}
+                      className="rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-xs hover:bg-neutral-700">
+                      {intro.homeBadgeUrl ? "Change" : "Upload"}
+                    </button>
+                    {intro.homeBadgeUrl && (
+                      <img src={intro.homeBadgeUrl} alt="Home badge" className="h-8 w-8 rounded-full border border-neutral-600 object-cover" />
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-[10px] font-medium text-neutral-400">Away badge</label>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => awayBadgeInputRef.current?.click()}
+                      className="rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-xs hover:bg-neutral-700">
+                      {intro.awayBadgeUrl ? "Change" : "Upload"}
+                    </button>
+                    {intro.awayBadgeUrl && (
+                      <img src={intro.awayBadgeUrl} alt="Away badge" className="h-8 w-8 rounded-full border border-neutral-600 object-cover" />
+                    )}
+                  </div>
                 </div>
               </div>
               <div>
@@ -697,11 +765,13 @@ export default function App() {
                         if (idx + 1 >= clips.length) { setIsPlayingReel(false); return }
                         setSelectedClipId(clips[idx + 1].id)
                       }} />
-                    <button type="button" onClick={handleGoalClick}
-                      className="absolute right-3 top-3 z-10 rounded-lg bg-yellow-500 px-3 py-1.5 text-xs font-bold text-black shadow-lg hover:bg-yellow-400">
-                      ⚽ GOAL
-                    </button>
-                    {selectedClip.showScoreboard && (
+                    {isNormalClip && (
+                      <button type="button" onClick={handleGoalClick}
+                        className="absolute right-3 top-3 z-10 rounded-lg bg-yellow-500 px-3 py-1.5 text-xs font-bold text-black shadow-lg hover:bg-yellow-400">
+                        ⚽ GOAL
+                      </button>
+                    )}
+                    {isNormalClip && selectedClip.showScoreboard && (
                       <ScoreboardOverlay scoreboard={scoreboard} minuteMarker={selectedClip.minuteMarker ?? ""} goals={goals} clips={clips} clipId={selectedClip.id} currentTimeInClip={videoCurrentTime} showScorerAfterGoal={selectedClip.showScorerAfterGoal} />
                     )}
                   </>
@@ -735,6 +805,29 @@ export default function App() {
                   </button>
                 </div>
 
+                {/* Clip role picker */}
+                <div className="mb-3 flex items-center gap-3">
+                  <span className="shrink-0 text-xs text-neutral-400">Clip role</span>
+                  <div className="flex gap-1">
+                    {(["normal", "intro", "outro"] as ClipRole[]).map((r) => (
+                      <button key={r} type="button"
+                        onClick={() => setClipRole(selectedClip.id, r)}
+                        className={`rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors ${
+                          (selectedClip.role ?? "normal") === r
+                            ? r === "intro" ? "bg-blue-500/20 text-blue-400 border border-blue-500/40"
+                              : r === "outro" ? "bg-purple-500/20 text-purple-400 border border-purple-500/40"
+                              : "bg-yellow-500/20 text-yellow-400 border border-yellow-500/40"
+                            : "bg-neutral-800 text-neutral-500 border border-neutral-700 hover:border-neutral-600"
+                        }`}>
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+                  {!isNormalClip && (
+                    <span className="text-[10px] text-neutral-500">Scoreboard &amp; goals disabled</span>
+                  )}
+                </div>
+
                 {/* Trim */}
                 <div className="grid grid-cols-2 gap-4">
                   {[
@@ -756,34 +849,36 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* Scoreboard */}
-                <div className="mt-4 border-t border-neutral-800 pt-4">
-                  <h4 className="mb-2 text-xs font-semibold text-neutral-300">Scoreboard overlay</h4>
-                  <div className="space-y-2">
-                    <label className="flex cursor-pointer items-center gap-2">
-                      <input type="checkbox" checked={selectedClip.showScoreboard}
-                        onChange={(e) => updateClipScoreboardOverlay(selectedClip.id, e.target.checked, selectedClip.minuteMarker)}
-                        className="h-3.5 w-3.5 rounded accent-yellow-500" />
-                      <span className="text-xs text-neutral-300">Show scoreboard on this clip</span>
-                    </label>
-                    <div className="flex items-center gap-3">
-                      <label className="text-xs text-neutral-400">Minute marker</label>
-                      <input type="text" value={selectedClip.minuteMarker}
-                        onChange={(e) => updateClipScoreboardOverlay(selectedClip.id, selectedClip.showScoreboard, e.target.value)}
-                        placeholder="e.g. 64'"
-                        className="w-24 rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs text-white placeholder-neutral-600 focus:border-neutral-500 focus:outline-none" />
+                {/* Scoreboard — only for normal clips */}
+                {isNormalClip && (
+                  <div className="mt-4 border-t border-neutral-800 pt-4">
+                    <h4 className="mb-2 text-xs font-semibold text-neutral-300">Scoreboard overlay</h4>
+                    <div className="space-y-2">
+                      <label className="flex cursor-pointer items-center gap-2">
+                        <input type="checkbox" checked={selectedClip.showScoreboard}
+                          onChange={(e) => updateClipScoreboardOverlay(selectedClip.id, e.target.checked, selectedClip.minuteMarker)}
+                          className="h-3.5 w-3.5 rounded accent-yellow-500" />
+                        <span className="text-xs text-neutral-300">Show scoreboard on this clip</span>
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <label className="text-xs text-neutral-400">Minute marker</label>
+                        <input type="text" value={selectedClip.minuteMarker}
+                          onChange={(e) => updateClipScoreboardOverlay(selectedClip.id, selectedClip.showScoreboard, e.target.value)}
+                          placeholder="e.g. 64'"
+                          className="w-24 rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs text-white placeholder-neutral-600 focus:border-neutral-500 focus:outline-none" />
+                      </div>
+                      <label className="flex cursor-pointer items-center gap-2">
+                        <input type="checkbox" checked={selectedClip.showScorerAfterGoal}
+                          onChange={(e) => setClipShowScorerAfterGoal(selectedClip.id, e.target.checked)}
+                          className="h-3.5 w-3.5 rounded accent-yellow-500" />
+                        <span className="text-xs text-neutral-300">Show scorer name after goal</span>
+                      </label>
                     </div>
-                    <label className="flex cursor-pointer items-center gap-2">
-                      <input type="checkbox" checked={selectedClip.showScorerAfterGoal}
-                        onChange={(e) => setClipShowScorerAfterGoal(selectedClip.id, e.target.checked)}
-                        className="h-3.5 w-3.5 rounded accent-yellow-500" />
-                      <span className="text-xs text-neutral-300">Show scorer name after goal</span>
-                    </label>
                   </div>
-                </div>
+                )}
 
-                {/* Goals list */}
-                {goals.filter((g) => g.clipId === selectedClip.id).length > 0 && (
+                {/* Goals list — only for normal clips */}
+                {isNormalClip && goals.filter((g) => g.clipId === selectedClip.id).length > 0 && (
                   <div className="mt-4 border-t border-neutral-800 pt-4">
                     <h4 className="mb-2 text-xs font-semibold text-neutral-300">Goals in this clip</h4>
                     <ul className="space-y-1.5">

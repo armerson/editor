@@ -15,6 +15,8 @@ export const ProjectSchema = z.object({
         showScoreboard: z.boolean(),
         minuteMarker: z.string(),
         showScorerAfterGoal: z.boolean(),
+        /** "normal" if absent — backward compat */
+        role: z.enum(["normal", "intro", "outro"]).optional(),
         src: z.string().url().optional(),
         thumbnail: z.string().url().optional(),
       })
@@ -26,7 +28,12 @@ export const ProjectSchema = z.object({
     score: z.string(),
     matchDate: z.string(),
     ageGroup: z.string(),
-    clubBadgeUrl: z.string(),
+    /** Legacy single-badge field — kept for backward compat. Renderer should prefer homeBadgeUrl. */
+    clubBadgeUrl: z.string().optional(),
+    /** Home club badge (new). Takes precedence over clubBadgeUrl. */
+    homeBadgeUrl: z.string().optional(),
+    /** Away club badge (new). May be absent. */
+    awayBadgeUrl: z.string().optional(),
     durationSeconds: z.number(),
   }),
   scoreboard: z.object({
@@ -63,4 +70,3 @@ export const ProjectSchema = z.object({
 })
 
 export type Project = z.infer<typeof ProjectSchema>
-
