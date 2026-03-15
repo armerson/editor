@@ -37,10 +37,10 @@ const REMOTION_FRAME_TIMEOUT_MS = Number(process.env.REMOTION_FRAME_TIMEOUT_MS ?
  * subprocess (Rust + FFmpeg) and headless Chrome each allocate their own
  * memory on top of this.  On Railway's 512 MB starter plan the full budget is:
  *
- *   Node.js process     ~150 MB
- *   Frame cache         this setting
- *   Compositor (FFmpeg)  ~80–200 MB  (capped further by REMOTION_VIDEO_THREADS)
- *   Headless Chrome      ~150–250 MB
+ *   Node.js process         ~150 MB
+ *   Frame cache             this setting
+ *   Compositor (FFmpeg)      ~80–150 MB  (single thread via REMOTION_VIDEO_THREADS)
+ *   Headless Chrome          ~120–180 MB  (single-process via chromiumOptions)
  *
  * Keep this small (default 32 MB) to leave headroom for the compositor and
  * Chrome.  Increase only on instances with ≥1 GB RAM.
@@ -99,12 +99,30 @@ function makeTimeoutPromise(ms: number, jobId: string): Promise<never> {
 }
 
 /**
+ * Mask a Firebase Storage / S3 URL to just the filename for log readability.
+ * e.g. "https://storage.googleapis.com/bucket/clips/foo.mp4?token=..." → "foo.mp4"
+ */
+function maskUrl(url: string | undefined | null): string {
+  if (!url) return "(none)"
+  try {
+    const pathname = new URL(url).pathname
+    return pathname.split("/").pop()?.split("?")[0] ?? "(unknown)"
+  } catch {
+    return url.slice(-40)  // fall back to last 40 chars if not parseable
+  }
+}
+
+/**
  * Bundles the Remotion project once per process, then renders to MP4.
  *
  * Env:
  * - REMOTION_ROOT             Absolute path to the Renderer project folder
  * - REMOTION_COMPOSITION_ID   Composition id to render (default: "HighlightReel")
  * - RENDER_TIMEOUT_MS         Max ms allowed for a render (default: 1 200 000 = 20 min)
+ * - REMOTION_CONCURRENCY      Compositor concurrency (default: 1)
+ * - REMOTION_FRAME_TIMEOUT_MS Per-frame timeout (default: 60 000)
+ * - REMOTION_VIDEO_CACHE_MB   OffthreadVideo frame cache size in MB (default: 32)
+ * - REMOTION_VIDEO_THREADS    FFmpeg thread count per clip (default: 1)
  */
 export async function renderProjectToMp4({
   jobId,
@@ -117,6 +135,49 @@ export async function renderProjectToMp4({
 
   await fs.mkdir(rendersDir, { recursive: true })
   const outPath = localRenderedPath(rendersDir, jobId)
+
+  // ── Pre-render diagnostics ───────────────────────────────────────────────
+  const clips = project.clips ?? []
+  const clipCount = clips.length
+  const totalClipSeconds = clips.reduce(
+    (sum, c) => sum + Math.max(0, (c.trimEnd ?? 0) - (c.trimStart ?? 0)),
+    0
+  )
+  const introDuration = project.intro?.durationSeconds ?? 3
+
+  logger.info(
+    {
+      jobId,
+      clipCount,
+      totalClipSeconds: Math.round(totalClipSeconds),
+      introDurationSeconds: introDuration,
+      hasMusic: !!project.music?.musicUrl,
+      musicEndInReel: project.music?.musicEndInReel,
+      cacheBytes: REMOTION_VIDEO_CACHE_BYTES,
+      threads: REMOTION_VIDEO_THREADS,
+      concurrency: REMOTION_CONCURRENCY,
+    },
+    "render pre-flight"
+  )
+
+  for (let i = 0; i < clips.length; i++) {
+    const clip = clips[i]
+    logger.info(
+      {
+        jobId,
+        clipIndex: i + 1,
+        clipId: clip.id,
+        name: clip.name,
+        srcFile: maskUrl(clip.src),
+        hasSrc: !!clip.src,
+        trimStart: clip.trimStart,
+        trimEnd: clip.trimEnd,
+        durationSec: Math.round(((clip.trimEnd ?? 0) - (clip.trimStart ?? 0)) * 10) / 10,
+        role: clip.role ?? "normal",
+      },
+      "clip pre-flight"
+    )
+  }
 
   // ── Bundle (cached per process) ──────────────────────────────────────────
   if (!cachedBundle) {
@@ -142,10 +203,14 @@ export async function renderProjectToMp4({
     inputProps,
   })
 
-  logger.info({ jobId, compositionId, outPath }, "render starting")
+  logger.info(
+    { jobId, compositionId, durationInFrames: composition.durationInFrames, outPath },
+    "render starting"
+  )
 
   // ── Render with timeout ───────────────────────────────────────────────────
   let lastReportedPct = -1
+  let lastLoggedFrame = -1
 
   const renderPromise = renderMedia({
     serveUrl: cachedBundle.serveUrl,
@@ -153,37 +218,85 @@ export async function renderProjectToMp4({
     codec: "h264",
     outputLocation: outPath,
     inputProps,
+
     // Keep memory under Railway's limits — 1 compositor at a time.
     // Increase REMOTION_CONCURRENCY env var on larger instances.
     concurrency: REMOTION_CONCURRENCY,
+
     // Give each frame more time to decode remote video (Firebase Storage).
     timeoutInMilliseconds: REMOTION_FRAME_TIMEOUT_MS,
+
     // Cap the OffthreadVideo decoded-frame cache to prevent SIGKILL OOM.
     // Without this limit Remotion holds every decoded frame in RAM forever,
     // which exhausts memory on restricted hosts (512 MB Railway containers).
     // Frames beyond the cap are evicted and re-decoded on demand.
     offthreadVideoCacheSizeInBytes: REMOTION_VIDEO_CACHE_BYTES,
+
     // Limit FFmpeg thread count inside the compositor subprocess.
     // Each FFmpeg thread holds its own decode buffer (~10–30 MB for 1080p H.264);
     // single-threaded decoding keeps compositor RSS ~80 MB vs ~300 MB at default.
     // At concurrency=1 there is no throughput penalty since frames are sequential.
     offthreadVideoThreads: REMOTION_VIDEO_THREADS,
-    onProgress: ({ progress }) => {
+
+    // ── Chrome memory hardening ────────────────────────────────────────────
+    // On Linux, Chromium can run in multi-process mode (Zygote model) where
+    // it spawns renderer subprocesses that each consume ~80–150 MB.  With
+    // concurrency=1 there is no rendering benefit; explicitly disable
+    // multi-process to keep Chrome's total footprint to ~120–180 MB.
+    chromiumOptions: {
+      enableMultiProcessOnLinux: false,
+    },
+
+    // ── Diagnostics ───────────────────────────────────────────────────────
+    onStart: ({ frameCount, parallelEncoding }) => {
+      logger.info(
+        { jobId, frameCount, parallelEncoding, totalClipSeconds: Math.round(totalClipSeconds) },
+        "compositor started"
+      )
+    },
+
+    // Capture React-side console.error / console.warn output from the renderer.
+    // These messages surface issues like missing clip srcs or bad data that would
+    // otherwise be invisible — they show up with the job ID so they're traceable.
+    onBrowserLog: ({ type, text, stackTrace }) => {
+      if (type === "error") {
+        logger.error({ jobId, text, stackTrace }, "renderer [browser error]")
+      } else if (type === "warning") {
+        logger.warn({ jobId, text }, "renderer [browser warning]")
+      }
+      // info / log / debug are suppressed to avoid noise; React DevTools etc.
+    },
+
+    onProgress: ({ progress, renderedFrames }) => {
       const pct = Math.floor(progress * 100)
+      const frame = renderedFrames ?? -1
 
       // Throttle: only fire callback and log every PROGRESS_THROTTLE_PCT points.
       if (pct - lastReportedPct >= PROGRESS_THROTTLE_PCT || pct === 100) {
         lastReportedPct = pct
-        logger.debug({ jobId, progress_pct: pct }, "render progress")
+        lastLoggedFrame = frame
+        logger.info({ jobId, progress_pct: pct, renderedFrames: frame }, "render progress")
         onProgress?.(progress)
       }
     },
   })
 
-  await Promise.race([
-    renderPromise,
-    makeTimeoutPromise(RENDER_TIMEOUT_MS, jobId),
-  ])
+  try {
+    await Promise.race([
+      renderPromise,
+      makeTimeoutPromise(RENDER_TIMEOUT_MS, jobId),
+    ])
+  } catch (err) {
+    // Re-throw with richer context so the job error field shows exactly where
+    // the failure occurred (last known frame, clip count, total duration).
+    const base = err instanceof Error ? err.message : String(err)
+    const augmented = new Error(
+      `Render failed at frame ~${lastLoggedFrame} of ${composition.durationInFrames}` +
+      ` (${clipCount} clips, ~${Math.round(totalClipSeconds)}s total): ${base}`
+    )
+    augmented.cause = err
+    throw augmented
+  }
 
   logger.info({ jobId, outPath }, "render complete")
   return { localMp4Path: outPath }

@@ -6,6 +6,17 @@ import { ClipSegment } from '../components/ClipSegment';
 import { ScoreboardOverlay } from '../components/ScoreboardOverlay';
 import { LowerThirdsOverlay } from '../components/LowerThirdsOverlay';
 
+// ─── Renderer-side diagnostics ────────────────────────────────────────────────
+// These console calls run inside headless Chrome during the render; the server
+// captures them via onBrowserLog and writes them to the structured log with the
+// job ID so failures can be traced to specific clips or frames.
+function logOnce(frame: number, message: string): void {
+  if (frame === 0) console.log(`[HighlightReel] ${message}`)
+}
+function warnOnce(frame: number, message: string): void {
+  if (frame === 0) console.warn(`[HighlightReel] ${message}`)
+}
+
 export type HighlightReelProps = HighlightReelData & {
   /** Output preset id: 'landscape' | 'square' | 'vertical' */
   presetId?: string;
@@ -197,6 +208,7 @@ export function getHighlightReelDurationInFrames(props: HighlightReelProps): num
 }
 
 export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
+  const frame = useCurrentFrame();
   const fps = props.fps ?? FPS;
   const introDuration = props.intro?.durationSeconds ?? 3;
   const introDurationFrames = introDuration > 0 ? Math.ceil(introDuration * fps) : 0;
@@ -209,6 +221,29 @@ export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
     clipStartFrames.push(acc);
     acc += Math.ceil(getClipDurationSeconds(clips[i]) * fps);
   }
+
+  // ── Diagnostics (captured by server onBrowserLog) ─────────────────────────
+  logOnce(frame, `clips=${clips.length} intro=${introDurationFrames}f total=${acc}f fps=${fps}`)
+  for (let i = 0; i < clips.length; i++) {
+    const c = clips[i];
+    logOnce(frame, `clip[${i + 1}] "${c.name ?? '?'}" src=${c.src ? 'ok' : 'MISSING'} trim=${c.trimStart ?? 0}-${c.trimEnd ?? '?'} role=${c.role ?? 'normal'}`)
+  }
+  // Warn about dropped clips (had no src after filtering)
+  const droppedCount = allClips.length - clips.length;
+  if (droppedCount > 0) {
+    warnOnce(frame, `${droppedCount} clip(s) dropped due to missing src`)
+  }
+  // Determine which clip is rendering right now (for per-frame diagnostics)
+  React.useMemo(() => {
+    for (let i = 0; i < clips.length; i++) {
+      const start = clipStartFrames[i] ?? 0;
+      const dur = Math.ceil(getClipDurationSeconds(clips[i]) * fps);
+      if (frame >= start && frame < start + dur && frame === start) {
+        console.log(`[HighlightReel] → starting clip[${i + 1}] "${clips[i].name ?? '?'}" at frame ${frame}`)
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frame])
 
   // Music timeline: startInReel/endInReel are reel positions (not source positions).
   const totalReelFrames = getHighlightReelDurationInFrames(props);

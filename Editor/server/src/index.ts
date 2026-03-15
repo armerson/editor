@@ -122,6 +122,20 @@ app.post("/api/render", async (req, res) => {
     return
   }
 
+  // ── Concurrent render guard ──────────────────────────────────────────────
+  // Railway's 512 MB starter plan cannot sustain two simultaneous renders.
+  // Each render uses ~400-500 MB (Node.js + Chrome + FFmpeg compositor);
+  // a second parallel render would immediately OOM-kill the container.
+  // Reject with 429 if a render is already in progress — the client must
+  // poll the existing job and retry after it finishes.
+  const active = getActiveJobCount()
+  if (active >= 1) {
+    logger.warn({ activeJobs: active }, "render rejected: another render is already in progress")
+    const body: ErrorResponse = { error: "A render is already in progress. Please wait for it to finish, then try again." }
+    res.status(429).json(body)
+    return
+  }
+
   const job = createJob()
 
   // HTTP 202 Accepted — job is queued, poll GET /api/render/:jobId for status.

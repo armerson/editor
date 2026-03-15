@@ -53,6 +53,38 @@ export const ClipSegment: React.FC<ClipSegmentProps> = ({
     { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
   );
 
+  // ── Safe fallback for missing/empty src ───────────────────────────────────
+  // Passing an empty or undefined src to OffthreadVideo causes the compositor
+  // to stall waiting for a video that can never load, which eventually triggers
+  // a SIGKILL or a 90-second timeout that aborts the entire render.
+  // Render a silent black placeholder instead so the reel can still complete.
+  if (!src || !src.trim()) {
+    console.error(
+      `[ClipSegment] frame ${frame}: src is empty — rendering black placeholder. ` +
+      `Ensure every clip has a valid video URL before rendering.`
+    )
+    return (
+      <AbsoluteFill
+        style={{
+          backgroundColor: '#000',
+          opacity,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'system-ui, sans-serif',
+            fontSize: 24,
+            color: 'rgba(255,255,255,0.3)',
+          }}
+        >
+          Missing video
+        </span>
+      </AbsoluteFill>
+    );
+  }
+
   // A clip is muted if the per-clip flag is set OR the global clipAudioOn is false.
   const isMuted = !clipAudioOn || muteAudio;
 
