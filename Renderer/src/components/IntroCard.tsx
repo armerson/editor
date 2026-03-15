@@ -5,6 +5,13 @@ import type { IntroCardData } from '../types/reel';
 /** Frames for overall card fade-in / fade-out — dissolves into first clip. */
 const TRANSITION_FRAMES = 15;
 
+/**
+ * Per-component delayRender timeout for <Img> badge loading.
+ * Overrides the global 30 s default without requiring a Studio or server restart.
+ * Badge images hosted on Firebase Storage can take several seconds on first fetch.
+ */
+const IMG_TIMEOUT_MS = 90_000
+
 type IntroCardProps = IntroCardData & {
   /** Total duration of the intro in frames — used to time the fade-out. */
   durationFrames: number;
@@ -198,6 +205,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
           {effectiveHomeBadge ? (
             <Img
               src={effectiveHomeBadge}
+              delayRenderTimeoutInMilliseconds={IMG_TIMEOUT_MS}
               style={{
                 width: 200,
                 height: 200,
@@ -272,6 +280,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
             {effectiveAwayBadge ? (
               <Img
                 src={effectiveAwayBadge}
+                delayRenderTimeoutInMilliseconds={IMG_TIMEOUT_MS}
                 style={{
                   width: 200,
                   height: 200,

@@ -5,6 +5,19 @@ import type { ClipData } from '../types/reel';
 /** Number of frames for fade-in at clip start and fade-out at clip end. */
 const TRANSITION_FRAMES = 15; // 0.5 s at 30 fps
 
+/**
+ * Per-component delayRender timeout for OffthreadVideo frame extraction.
+ *
+ * This prop-level timeout overrides both the global remotion.config.ts setting
+ * AND the global window.remotion_puppeteerTimeout injected at render time, so
+ * it takes effect immediately without restarting the Studio or the render server.
+ *
+ * 90 s gives FFmpeg enough headroom to decode a frame from a remote storage URL
+ * (Firebase / S3) on first access, which requires downloading the video range
+ * before the specific frame can be extracted.
+ */
+const OFFTHREAD_VIDEO_TIMEOUT_MS = 90_000
+
 type ClipSegmentProps = ClipData & {
   /** FPS for frame-based trim */
   fps: number;
@@ -51,6 +64,7 @@ export const ClipSegment: React.FC<ClipSegmentProps> = ({
         trimAfter={trimAfterFrames}
         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
         muted={isMuted}
+        delayRenderTimeoutInMilliseconds={OFFTHREAD_VIDEO_TIMEOUT_MS}
       />
     </AbsoluteFill>
   );
