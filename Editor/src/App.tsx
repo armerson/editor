@@ -80,6 +80,7 @@ export default function App() {
   const [currentReelTime, setCurrentReelTime] = useState(0)
   const [projectTitle, setProjectTitle] = useState("Untitled Project")
   const [saveLoadStatus, setSaveLoadStatus] = useState<string | null>(null)
+  const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "pending" | null>(null)
   const [aspectRatio, setAspectRatio] = useState<AspectRatioPreset>("landscape")
   const [renderState, setRenderState] = useState<RenderState>({
     status: "idle",
@@ -110,6 +111,12 @@ export default function App() {
   const musicVolumeRef = useRef(musicVolume)
   musicVolumeRef.current = musicVolume
   isPlayingReelRef.current = isPlayingReel
+  // Refs that mirror their state counterparts so the RAF tick can always read
+  // the latest values without being in the effect's dependency list.
+  const musicEndInReelRef = useRef<number | "">(musicEndInReel)
+  musicEndInReelRef.current = musicEndInReel
+  const fadeOutDurationRef = useRef(fadeOutDuration)
+  fadeOutDurationRef.current = fadeOutDuration
   // Stable ref to the latest handleGoalClick — used by keyboard shortcut effect
   // so it never needs to be torn down and re-registered.
   const handleGoalClickRef = useRef<(() => void) | null>(null)
@@ -522,8 +529,13 @@ export default function App() {
 
     const bufVideo = activePrimaryRef.current ? bufferRef.current : primaryRef.current
     if (bufVideo) {
-      if (bufVideo.src !== next.url) bufVideo.src = next.url
-      bufVideo.currentTime = next.trimStart
+      // Only reset src+position when the buffer wasn't already preloaded to this
+      // clip — an unnecessary seek at transition time is the main source of the
+      // black-frame gap.
+      if (bufVideo.src !== next.url) {
+        bufVideo.src = next.url
+        bufVideo.currentTime = next.trimStart
+      }
       bufVideo.muted = !clipAudioOn || (next.muteAudio ?? false)
       void bufVideo.play().catch((e) => console.warn("[reel] buffer play failed", e))
     }
@@ -534,14 +546,18 @@ export default function App() {
     setActivePrimary(activePrimaryRef.current)
     setSelectedClipId(next.id)
 
-    // Preload the clip after next into the newly-idle buffer
+    // Preload the clip after next into the newly-idle buffer.
+    // We play() it briefly (muted) to warm up the decoder so the first frame is
+    // ready before the next transition fires — then pause so we don't drift.
     const afterNext = clips[nextIdx + 1]
     const newBuf = activePrimaryRef.current ? bufferRef.current : primaryRef.current
     if (afterNext && newBuf && newBuf.src !== afterNext.url) {
       console.log("[reel] preloading clip", nextIdx + 1, afterNext.id.slice(0, 8))
       newBuf.src = afterNext.url
       newBuf.currentTime = afterNext.trimStart
-      newBuf.load()
+      newBuf.muted = true
+      // Play briefly so the browser decodes the first frame, then pause.
+      void newBuf.play().then(() => { newBuf.pause(); newBuf.currentTime = afterNext.trimStart }).catch(() => {})
     }
     console.log("[reel] transition → clip", nextIdx, next.id.slice(0, 8),
       "active:", activePrimaryRef.current ? "primary" : "buffer")
@@ -616,57 +632,55 @@ export default function App() {
     if (audioRef.current) audioRef.current.volume = musicVolume
   }, [musicVolume, musicTrack, isPlayingReel])
 
-  // RAF loop: wall-clock intro card timing + music start trigger.
-  // Fade is NOT handled here — it is derived from currentReelTime below.
+  // RAF loop: wall-clock intro timing + music start + music fade.
+  // All three run at ~60 fps inside a single loop so fade never misses a tick.
+  // Fade uses wall-clock elapsed (not currentReelTime) so it stays locked to
+  // where the music actually is, independent of React render batching.
   useEffect(() => {
     if (!isPlayingReel) { audioRef.current?.pause(); return }
     const tick = () => {
       if (!isPlayingReelRef.current) return
       const elapsed = (performance.now() - reelStartTimeRef.current) / 1000
-      // Only drive reelTime from wall-clock during the intro card — once clips
-      // are playing, handleVideoTimeUpdate derives it from video.currentTime.
+
+      // Wall-clock drives reelTime only during the intro card.
       if (showIntroCardRef.current) setCurrentReelTime(elapsed)
+
       const audio = audioRef.current
+
+      // ── Music start ────────────────────────────────────────────────────────
       if (audio && musicTrack && !musicStartedThisReelRef.current && elapsed >= musicStartInReel) {
         musicStartedThisReelRef.current = true
         audio.currentTime = Math.max(0, musicStartInTrack)
         audio.volume = musicVolumeRef.current
         void audio.play().catch(() => {})
       }
+
+      // ── Music fade ─────────────────────────────────────────────────────────
+      // Only act after music has started; read latest values via refs so the
+      // effect doesn't need musicEndInReel / fadeOutDuration in its dep list.
+      if (audio && musicStartedThisReelRef.current) {
+        const endSec = musicEndInReelRef.current === "" ? null : Number(musicEndInReelRef.current)
+        if (endSec != null && endSec > 0) {
+          const dur = Math.max(fadeOutDurationRef.current, 0.001)
+          const fadeStart = endSec - dur
+          if (elapsed >= endSec) {
+            // Past end — silence and stop (idempotent)
+            if (!audio.paused) { audio.volume = 0; audio.pause() }
+          } else if (elapsed >= fadeStart) {
+            // Inside fade zone — linear interpolation at 60 fps
+            audio.volume = Math.max(0, musicVolumeRef.current * (1 - (elapsed - fadeStart) / dur))
+          } else {
+            // Before fade zone — keep slider changes live
+            audio.volume = musicVolumeRef.current
+          }
+        }
+      }
+
       rafIdRef.current = requestAnimationFrame(tick)
     }
     rafIdRef.current = requestAnimationFrame(tick)
     return () => { cancelAnimationFrame(rafIdRef.current) }
   }, [isPlayingReel, musicTrack, musicStartInReel, musicStartInTrack])
-
-  // Continuously derive music volume from currentReelTime.
-  // This replaces the old one-shot fade loop and eliminates drift between the
-  // playhead and the audio envelope.
-  useEffect(() => {
-    if (!isPlayingReel || !musicTrack) return
-    const audio = audioRef.current
-    if (!audio) return
-    const endSec = musicEndInReel === "" ? null : Number(musicEndInReel)
-    // No end configured (or endSec=0 meaning "play through") → full volume
-    if (endSec == null || endSec <= 0) {
-      audio.volume = musicVolume
-      return
-    }
-    const dur = Math.max(fadeOutDuration, 0.001)
-    const fadeStart = endSec - dur
-    if (currentReelTime < fadeStart) {
-      // Before fade zone
-      audio.volume = musicVolume
-    } else if (currentReelTime >= endSec) {
-      // Past end — silence and pause
-      if (audio.volume !== 0) audio.volume = 0
-      if (!audio.paused) audio.pause()
-    } else {
-      // Inside fade zone: linear interpolation musicVolume → 0
-      const t = (currentReelTime - fadeStart) / dur
-      audio.volume = Math.max(0, musicVolume * (1 - t))
-    }
-  }, [currentReelTime, isPlayingReel, musicVolume, musicEndInReel, fadeOutDuration, musicTrack])
 
   useEffect(() => {
     if (!isPlayingReel || !showIntroCard || clips.length === 0) return
@@ -719,6 +733,34 @@ export default function App() {
     if (!videoRef.current) return
     videoRef.current.volume = (clipAudioOn && !(selectedClip?.muteAudio ?? false)) ? 1 : 0
   }, [clipAudioOn, selectedClip?.id, selectedClip?.muteAudio])
+
+  // ── Badge preload ───────────────────────────────────────────────────────────
+  // Kick the browser's image cache as soon as badge URLs are known so the
+  // images are ready before the intro card appears (no "pop-in" delay).
+  useEffect(() => {
+    if (intro.homeBadgeUrl) { const img = new Image(); img.src = intro.homeBadgeUrl }
+    if (intro.awayBadgeUrl) { const img = new Image(); img.src = intro.awayBadgeUrl }
+  }, [intro.homeBadgeUrl, intro.awayBadgeUrl])
+
+  // ── Auto-save (draft) ───────────────────────────────────────────────────────
+  // Debounced: writes to DRAFT_STORAGE_KEY 3 s after the last change so the
+  // user never loses work without hitting Save manually.
+  useEffect(() => {
+    setAutoSaveStatus("pending")
+    const tid = setTimeout(() => {
+      try {
+        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(buildProjectSnapshot()))
+        setAutoSaveStatus("saved")
+      } catch {
+        // QuotaExceededError or private-browsing restriction — silently ignore
+        setAutoSaveStatus(null)
+      }
+    }, 3000)
+    return () => clearTimeout(tid)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clips, intro, scoreboard, goals, musicTrack, musicVolume, musicStartInReel,
+      musicStartInTrack, musicEndInReel, fadeOutDuration, clipAudioOn, projectTitle,
+      aspectRatio, introEnabled])
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────────
 
@@ -801,6 +843,12 @@ export default function App() {
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             {saveLoadStatus && <span className="text-xs text-neutral-400">{saveLoadStatus}</span>}
+            {!saveLoadStatus && autoSaveStatus === "saved" && (
+              <span className="text-xs text-neutral-600">● draft saved</span>
+            )}
+            {!saveLoadStatus && autoSaveStatus === "pending" && (
+              <span className="text-xs text-neutral-700">saving…</span>
+            )}
             <button type="button" onClick={handleSaveProject} className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm hover:bg-neutral-800">Save</button>
             <button type="button" onClick={handleSaveDraft} className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm hover:bg-neutral-800">Draft</button>
             <button type="button" onClick={handleLoadProject} className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm hover:bg-neutral-800">Load</button>
@@ -980,7 +1028,7 @@ export default function App() {
                   controls={activePrimary && !!selectedClip?.url && !isPlayingReel}
                   muted={!clipAudioOn || (selectedClip?.muteAudio ?? false)}
                   className="absolute inset-0 h-full w-full object-contain"
-                  style={{ opacity: (activePrimary && !!selectedClip?.url && !(isPlayingReel && showIntroCard && introEnabled)) ? 1 : 0, pointerEvents: activePrimary ? "auto" : "none" }}
+                  style={{ opacity: (activePrimary && !!selectedClip?.url && !(isPlayingReel && showIntroCard && introEnabled)) ? 1 : 0, pointerEvents: activePrimary ? "auto" : "none", transition: "opacity 0.08s linear" }}
                   onTimeUpdate={() => { if (activePrimaryRef.current) handleVideoTimeUpdate() }}
                   onEnded={() => { if (activePrimaryRef.current) handleVideoEnded() }}
                 />
@@ -992,7 +1040,7 @@ export default function App() {
                   controls={!activePrimary && !!selectedClip?.url && !isPlayingReel}
                   muted={!clipAudioOn || (selectedClip?.muteAudio ?? false)}
                   className="absolute inset-0 h-full w-full object-contain"
-                  style={{ opacity: (!activePrimary && !!selectedClip?.url && !(isPlayingReel && showIntroCard && introEnabled)) ? 1 : 0, pointerEvents: activePrimary ? "none" : "auto" }}
+                  style={{ opacity: (!activePrimary && !!selectedClip?.url && !(isPlayingReel && showIntroCard && introEnabled)) ? 1 : 0, pointerEvents: activePrimary ? "none" : "auto", transition: "opacity 0.08s linear" }}
                   onTimeUpdate={() => { if (!activePrimaryRef.current) handleVideoTimeUpdate() }}
                   onEnded={() => { if (!activePrimaryRef.current) handleVideoEnded() }}
                 />

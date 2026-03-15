@@ -12,6 +12,22 @@ let cachedBundle: { serveUrl: string } | null = null
 /** Default: 20 minutes. Override with RENDER_TIMEOUT_MS env var. */
 const RENDER_TIMEOUT_MS = Number(process.env.RENDER_TIMEOUT_MS ?? 20 * 60 * 1000)
 
+/**
+ * Remotion compositor concurrency.
+ * Default: 1 — forces sequential frame rendering to stay within Railway's
+ * memory limits (a SIGKILL on the compositor means the container OOMed).
+ * Increase on machines with ≥4 GB RAM: REMOTION_CONCURRENCY=4
+ */
+const REMOTION_CONCURRENCY = Number(process.env.REMOTION_CONCURRENCY ?? 1)
+
+/**
+ * Per-frame render timeout passed to Remotion.
+ * Default 60 s (Remotion's own default is 30 s, which is too tight when
+ * a slow network must fetch a clip from Firebase Storage during rendering).
+ * Override with REMOTION_FRAME_TIMEOUT_MS env var.
+ */
+const REMOTION_FRAME_TIMEOUT_MS = Number(process.env.REMOTION_FRAME_TIMEOUT_MS ?? 60_000)
+
 /** Only emit an onProgress log/callback every N percentage points to reduce noise. */
 const PROGRESS_THROTTLE_PCT = 5
 
@@ -92,6 +108,11 @@ export async function renderProjectToMp4({
     codec: "h264",
     outputLocation: outPath,
     inputProps,
+    // Keep memory under Railway's limits — 1 compositor at a time.
+    // Increase REMOTION_CONCURRENCY env var on larger instances.
+    concurrency: REMOTION_CONCURRENCY,
+    // Give each frame more time to decode remote video (Firebase Storage).
+    timeoutInMilliseconds: REMOTION_FRAME_TIMEOUT_MS,
     onProgress: ({ progress }) => {
       const pct = Math.floor(progress * 100)
 
