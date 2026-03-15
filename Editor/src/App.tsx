@@ -556,8 +556,10 @@ export default function App() {
       newBuf.src = afterNext.url
       newBuf.currentTime = afterNext.trimStart
       newBuf.muted = true
-      // Play briefly so the browser decodes the first frame, then pause.
-      void newBuf.play().then(() => { newBuf.pause(); newBuf.currentTime = afterNext.trimStart }).catch(() => {})
+      // .load() tells the browser to start buffering from trimStart.
+      // Avoid play().then(pause) — the async callback can fire after the reel
+      // ends and stomp the primary video's currentTime/paused state.
+      newBuf.load()
     }
     console.log("[reel] transition → clip", nextIdx, next.id.slice(0, 8),
       "active:", activePrimaryRef.current ? "primary" : "buffer")
