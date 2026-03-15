@@ -47,7 +47,16 @@ const app = express()
 
 // Allow the Vercel frontend origin (or * for local dev / unset).
 const corsOrigin = process.env.CORS_ORIGIN ?? "*"
-app.use(cors({ origin: corsOrigin }))
+const corsOptions: cors.CorsOptions = {
+  origin: corsOrigin,
+  // Explicitly allow the custom auth header so the browser preflight passes.
+  allowedHeaders: ["Content-Type", "X-Beta-Token"],
+  methods: ["GET", "POST", "OPTIONS"],
+}
+// Must handle OPTIONS before any auth middleware — cors() alone doesn't
+// guarantee a short-circuit when origin is a specific string.
+app.options("*", cors(corsOptions))
+app.use(cors(corsOptions))
 app.use(express.json({ limit: "25mb" }))
 
 // Request logging middleware
@@ -80,6 +89,8 @@ app.get("/healthz", (_req, res) => {
 // ── Beta token guard (protects all /api/* routes) ─────────────────────────────
 if (BETA_TOKEN) {
   app.use("/api", (req, res, next) => {
+    // Always let CORS preflight through — auth headers aren't sent on OPTIONS.
+    if (req.method === "OPTIONS") { next(); return }
     const token = req.headers["x-beta-token"]
     if (token !== BETA_TOKEN) {
       logger.warn({ url: req.url }, "rejected request: missing or invalid beta token")
