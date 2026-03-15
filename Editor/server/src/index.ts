@@ -147,7 +147,7 @@ app.post("/api/render", async (req, res) => {
     try {
       updateJob(job.jobId, { status: "rendering", progress: 0 })
 
-      const { localMp4Path } = await renderProjectToMp4({
+      const result = await renderProjectToMp4({
         jobId: job.jobId,
         project,
         rendersDir,
@@ -155,12 +155,18 @@ app.post("/api/render", async (req, res) => {
           updateJob(job.jobId, { status: "rendering", progress: p01 * 100 }),
       })
 
-      if (process.env.RENDER_OUTPUT_BUCKET) {
+      if (result.downloadUrl) {
+        // Lambda path: rendered MP4 is already on S3 with a public URL — no upload needed.
+        updateJob(job.jobId, { status: "done", progress: 100, downloadUrl: result.downloadUrl })
+        logger.info({ jobId: job.jobId, downloadUrl: result.downloadUrl }, "Lambda render stored on S3")
+      } else if (process.env.RENDER_OUTPUT_BUCKET) {
+        // Local path + Firebase upload.
         logger.info({ jobId: job.jobId }, "uploading mp4 to storage")
-        const upload = await uploadRenderedMp4(localMp4Path, job.jobId)
+        const upload = await uploadRenderedMp4(result.localMp4Path, job.jobId)
         updateJob(job.jobId, { status: "done", progress: 100, downloadUrl: upload.publicUrl })
         logger.info({ jobId: job.jobId, url: upload.publicUrl }, "upload complete")
       } else {
+        // Local path + serve from this server.
         const base = (process.env.PUBLIC_BASE_URL ?? `http://localhost:${PORT}`).replace(/\/$/, "")
         const downloadUrl = `${base}/renders/${job.jobId}.mp4`
         updateJob(job.jobId, { status: "done", progress: 100, downloadUrl })
