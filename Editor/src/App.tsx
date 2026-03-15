@@ -98,6 +98,7 @@ export default function App() {
   const musicStartedThisReelRef = useRef(false)
   const fadeOutStartedRef = useRef(false)
   const rafIdRef = useRef<number>(0)
+  const fadeRafRef = useRef<number>(0)
   const isPlayingReelRef = useRef(false)
   const musicVolumeRef = useRef(musicVolume)
   musicVolumeRef.current = musicVolume
@@ -497,7 +498,9 @@ export default function App() {
         void audio.play().catch(() => {})
       }
       const endSec = musicEndInReel === "" ? null : Number(musicEndInReel)
-      if (endSec != null && elapsed >= endSec && audio && !fadeOutStartedRef.current) {
+      // endSec > 0 guard: 0 or "" both mean "play to the end" — prevents
+      // an accidental endSec=0 from triggering an immediate fade on every play.
+      if (endSec != null && endSec > 0 && elapsed >= endSec && audio && !fadeOutStartedRef.current) {
         fadeOutStartedRef.current = true
         const fadeStart = performance.now(); const startVol = musicVolumeRef.current
         const doFade = () => {
@@ -505,14 +508,18 @@ export default function App() {
           const fe = (performance.now() - fadeStart) / 1000
           if (fe >= fadeOutDuration) { el.pause(); return }
           el.volume = Math.max(0, startVol * (1 - fe / fadeOutDuration))
-          rafIdRef.current = requestAnimationFrame(doFade)
+          // Use a separate ref so the fade loop doesn't race with the tick loop
+          fadeRafRef.current = requestAnimationFrame(doFade)
         }
-        rafIdRef.current = requestAnimationFrame(doFade)
+        fadeRafRef.current = requestAnimationFrame(doFade)
       }
       rafIdRef.current = requestAnimationFrame(tick)
     }
     rafIdRef.current = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(rafIdRef.current)
+    return () => {
+      cancelAnimationFrame(rafIdRef.current)
+      cancelAnimationFrame(fadeRafRef.current)
+    }
   }, [isPlayingReel, musicTrack, musicStartInReel, musicStartInTrack, musicEndInReel, fadeOutDuration])
 
   useEffect(() => {
