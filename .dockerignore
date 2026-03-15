@@ -1,0 +1,42 @@
+# Node modules — reinstalled inside the image
+**/node_modules
+
+# Compiled output — rebuilt inside the image
+**/dist
+
+# Remotion bundle cache — rebuilt at runtime
+**/.remotion-bundle
+
+# Rendered video output — should live on a volume, not in the image
+renders/
+**/*.mp4
+
+# SQLite data — should live on a volume
+data/
+
+# Frontend source — not needed in the server image
+Editor/src
+Editor/index.html
+Editor/vite.config.ts
+Editor/tsconfig.json
+Editor/tsconfig.app.json
+Editor/tsconfig.node.json
+Editor/eslint.config.js
+Editor/public
+Editor/node_modules
+
+# Old prototype backend
+Backend/
+
+# Environment files — inject secrets via env vars, never bake into image
+.env
+**/.env
+
+# VCS + OS
+.git
+.gitignore
+**/.DS_Store
+
+# Docs — not needed at runtime
+*.md
+.claude/

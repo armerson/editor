@@ -36,12 +36,18 @@ const rendersDir = process.env.RENDERS_DIR
   ? path.resolve(process.env.RENDERS_DIR)
   : path.resolve(process.cwd(), "renders")
 
+// Beta token — if set, all /api/* requests must include X-Beta-Token header.
+const BETA_TOKEN = process.env.BETA_TOKEN || null
+
 // ── Recover interrupted jobs from a previous run ──────────────────────────────
 recoverInterruptedJobs()
 
 // ── Express app ───────────────────────────────────────────────────────────────
 const app = express()
-app.use(cors())
+
+// Allow the Vercel frontend origin (or * for local dev / unset).
+const corsOrigin = process.env.CORS_ORIGIN ?? "*"
+app.use(cors({ origin: corsOrigin }))
 app.use(express.json({ limit: "25mb" }))
 
 // Request logging middleware
@@ -70,6 +76,21 @@ app.get("/health", (_req, res) => {
 app.get("/healthz", (_req, res) => {
   res.json(healthBody())
 })
+
+// ── Beta token guard (protects all /api/* routes) ─────────────────────────────
+if (BETA_TOKEN) {
+  app.use("/api", (req, res, next) => {
+    const token = req.headers["x-beta-token"]
+    if (token !== BETA_TOKEN) {
+      logger.warn({ url: req.url }, "rejected request: missing or invalid beta token")
+      const body: ErrorResponse = { error: "Unauthorized" }
+      res.status(401).json(body)
+      return
+    }
+    next()
+  })
+  logger.info("beta token guard enabled")
+}
 
 // ── POST /api/render ──────────────────────────────────────────────────────────
 app.post("/api/render", async (req, res) => {
