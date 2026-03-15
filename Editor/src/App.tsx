@@ -92,13 +92,19 @@ export default function App() {
   const homeBadgeInputRef = useRef<HTMLInputElement | null>(null)
   const awayBadgeInputRef = useRef<HTMLInputElement | null>(null)
   const musicInputRef = useRef<HTMLInputElement | null>(null)
+  // videoRef always points to whichever video is currently active/visible
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const primaryRef = useRef<HTMLVideoElement | null>(null)
+  const bufferRef = useRef<HTMLVideoElement | null>(null)
+  const activePrimaryRef = useRef(true)
+  const [activePrimary, setActivePrimary] = useState(true)
+  // Mirrors showIntroCard state for use inside RAF closure
+  const showIntroCardRef = useRef(false)
+  showIntroCardRef.current = showIntroCard
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const reelStartTimeRef = useRef<number>(0)
   const musicStartedThisReelRef = useRef(false)
-  const fadeOutStartedRef = useRef(false)
   const rafIdRef = useRef<number>(0)
-  const fadeRafRef = useRef<number>(0)
   const isPlayingReelRef = useRef(false)
   const musicVolumeRef = useRef(musicVolume)
   musicVolumeRef.current = musicVolume
@@ -473,23 +479,120 @@ export default function App() {
 
   // ── Reel playback ──────────────────────────────────────────────────────────
 
+  // ── Dual-video reel playback ────────────────────────────────────────────────
+
+  /** Swap to the pre-buffered video, then load the clip after next into the
+   *  new buffer so it's ready for the following transition. */
+  const doTransition = (nextIdx: number) => {
+    const next = clips[nextIdx]
+    if (!next) { setIsPlayingReel(false); return }
+
+    const bufVideo = activePrimaryRef.current ? bufferRef.current : primaryRef.current
+    if (bufVideo) {
+      if (bufVideo.src !== next.url) bufVideo.src = next.url
+      bufVideo.currentTime = next.trimStart
+      bufVideo.muted = !clipAudioOn || (next.muteAudio ?? false)
+      void bufVideo.play().catch((e) => console.warn("[reel] buffer play failed", e))
+    }
+
+    // Swap which element is "active"
+    activePrimaryRef.current = !activePrimaryRef.current
+    videoRef.current = activePrimaryRef.current ? primaryRef.current : bufferRef.current
+    setActivePrimary(activePrimaryRef.current)
+    setSelectedClipId(next.id)
+
+    // Preload the clip after next into the newly-idle buffer
+    const afterNext = clips[nextIdx + 1]
+    const newBuf = activePrimaryRef.current ? bufferRef.current : primaryRef.current
+    if (afterNext && newBuf && newBuf.src !== afterNext.url) {
+      console.log("[reel] preloading clip", nextIdx + 1, afterNext.id.slice(0, 8))
+      newBuf.src = afterNext.url
+      newBuf.currentTime = afterNext.trimStart
+      newBuf.load()
+    }
+    console.log("[reel] transition → clip", nextIdx, next.id.slice(0, 8),
+      "active:", activePrimaryRef.current ? "primary" : "buffer")
+  }
+
+  /** Called by onTimeUpdate on whichever video is currently active. */
+  const handleVideoTimeUpdate = () => {
+    const v = videoRef.current
+    if (!v || !selectedClip) return
+    const vt = v.currentTime
+    setVideoCurrentTime(vt)
+
+    if (isPlayingReel) {
+      // Derive reel time directly from the video position — eliminates timer drift
+      const clipIdx = clips.findIndex((c) => c.id === selectedClip.id)
+      if (clipIdx !== -1) {
+        const offsetBefore =
+          effectiveIntroDuration +
+          clips.slice(0, clipIdx).reduce((s, c) => s + Math.max(0, c.trimEnd - c.trimStart), 0)
+        const reelT = offsetBefore + Math.max(0, vt - selectedClip.trimStart)
+        setCurrentReelTime(reelT)
+        console.debug("[reel]", selectedClip.id.slice(0, 8), "vt:", vt.toFixed(2), "→ reelT:", reelT.toFixed(2))
+      }
+      // Transition at trimEnd
+      if (vt >= selectedClip.trimEnd) {
+        v.pause()
+        const idx = clips.findIndex((c) => c.id === selectedClip.id)
+        console.log("[reel] trimEnd at", vt.toFixed(2), "clip idx", idx)
+        doTransition(idx + 1)
+      }
+    }
+  }
+
+  const handleVideoEnded = () => {
+    if (!isPlayingReel || !selectedClip) return
+    const idx = clips.findIndex((c) => c.id === selectedClip.id)
+    console.log("[reel] video ended, clip idx", idx)
+    doTransition(idx + 1)
+  }
+
   const handlePlayReel = () => {
     if (clips.length === 0) return
+
+    // Always start from primary
+    activePrimaryRef.current = true
+    videoRef.current = primaryRef.current
+    setActivePrimary(true)
+
+    // Preload clip 0 into primary, clip 1 into buffer
+    if (primaryRef.current && clips[0]) {
+      primaryRef.current.src = clips[0].url
+      primaryRef.current.currentTime = clips[0].trimStart
+    }
+    if (bufferRef.current && clips[1]) {
+      console.log("[reel] preloading clip 1 into buffer on start")
+      bufferRef.current.src = clips[1].url
+      bufferRef.current.currentTime = clips[1].trimStart
+      bufferRef.current.load()
+    }
+
     // Skip intro card in preview when intro is disabled.
     setShowIntroCard(introEnabled); setIsPlayingReel(true)
     setSelectedClipId(introEnabled ? null : (clips[0]?.id ?? null)); setCurrentReelTime(0)
     reelStartTimeRef.current = performance.now()
-    musicStartedThisReelRef.current = false; fadeOutStartedRef.current = false
+    musicStartedThisReelRef.current = false
   }
 
-  useEffect(() => { if (audioRef.current) audioRef.current.volume = musicVolume }, [musicVolume, musicTrack])
+  // During non-reel mode, keep audio.volume in sync with the slider.
+  // During reel playback this is handled by the continuous fade effect below.
+  useEffect(() => {
+    if (isPlayingReel) return
+    if (audioRef.current) audioRef.current.volume = musicVolume
+  }, [musicVolume, musicTrack, isPlayingReel])
 
+  // RAF loop: wall-clock intro card timing + music start trigger.
+  // Fade is NOT handled here — it is derived from currentReelTime below.
   useEffect(() => {
     if (!isPlayingReel) { audioRef.current?.pause(); return }
     const tick = () => {
       if (!isPlayingReelRef.current) return
       const elapsed = (performance.now() - reelStartTimeRef.current) / 1000
-      setCurrentReelTime(elapsed)
+      // Only drive reelTime from wall-clock during the intro card — once clips
+      // are playing, handleVideoTimeUpdate derives it from video.currentTime.
+      if (showIntroCardRef.current) setCurrentReelTime(elapsed)
       const audio = audioRef.current
       if (audio && musicTrack && !musicStartedThisReelRef.current && elapsed >= musicStartInReel) {
         musicStartedThisReelRef.current = true
@@ -497,30 +600,40 @@ export default function App() {
         audio.volume = musicVolumeRef.current
         void audio.play().catch(() => {})
       }
-      const endSec = musicEndInReel === "" ? null : Number(musicEndInReel)
-      // endSec > 0 guard: 0 or "" both mean "play to the end" — prevents
-      // an accidental endSec=0 from triggering an immediate fade on every play.
-      if (endSec != null && endSec > 0 && elapsed >= endSec && audio && !fadeOutStartedRef.current) {
-        fadeOutStartedRef.current = true
-        const fadeStart = performance.now(); const startVol = musicVolumeRef.current
-        const doFade = () => {
-          const el = audioRef.current; if (!el || !isPlayingReelRef.current) return
-          const fe = (performance.now() - fadeStart) / 1000
-          if (fe >= fadeOutDuration) { el.pause(); return }
-          el.volume = Math.max(0, startVol * (1 - fe / fadeOutDuration))
-          // Use a separate ref so the fade loop doesn't race with the tick loop
-          fadeRafRef.current = requestAnimationFrame(doFade)
-        }
-        fadeRafRef.current = requestAnimationFrame(doFade)
-      }
       rafIdRef.current = requestAnimationFrame(tick)
     }
     rafIdRef.current = requestAnimationFrame(tick)
-    return () => {
-      cancelAnimationFrame(rafIdRef.current)
-      cancelAnimationFrame(fadeRafRef.current)
+    return () => { cancelAnimationFrame(rafIdRef.current) }
+  }, [isPlayingReel, musicTrack, musicStartInReel, musicStartInTrack])
+
+  // Continuously derive music volume from currentReelTime.
+  // This replaces the old one-shot fade loop and eliminates drift between the
+  // playhead and the audio envelope.
+  useEffect(() => {
+    if (!isPlayingReel || !musicTrack) return
+    const audio = audioRef.current
+    if (!audio) return
+    const endSec = musicEndInReel === "" ? null : Number(musicEndInReel)
+    // No end configured (or endSec=0 meaning "play through") → full volume
+    if (endSec == null || endSec <= 0) {
+      audio.volume = musicVolume
+      return
     }
-  }, [isPlayingReel, musicTrack, musicStartInReel, musicStartInTrack, musicEndInReel, fadeOutDuration])
+    const dur = Math.max(fadeOutDuration, 0.001)
+    const fadeStart = endSec - dur
+    if (currentReelTime < fadeStart) {
+      // Before fade zone
+      audio.volume = musicVolume
+    } else if (currentReelTime >= endSec) {
+      // Past end — silence and pause
+      if (audio.volume !== 0) audio.volume = 0
+      if (!audio.paused) audio.pause()
+    } else {
+      // Inside fade zone: linear interpolation musicVolume → 0
+      const t = (currentReelTime - fadeStart) / dur
+      audio.volume = Math.max(0, musicVolume * (1 - t))
+    }
+  }, [currentReelTime, isPlayingReel, musicVolume, musicEndInReel, fadeOutDuration, musicTrack])
 
   useEffect(() => {
     if (!isPlayingReel || !showIntroCard || clips.length === 0) return
@@ -528,13 +641,35 @@ export default function App() {
     return () => clearTimeout(t)
   }, [isPlayingReel, showIntroCard, clips, effectiveIntroDuration])
 
+  // When the intro card ends (showIntroCard → false), the primary video was
+  // already loaded in handlePlayReel; just press play.
   useEffect(() => {
-    if (!isPlayingReel || !selectedClip || !videoRef.current || showIntroCard) return
-    const v = videoRef.current; v.currentTime = selectedClip.trimStart
-    void v.play().catch(() => {})
-  }, [isPlayingReel, selectedClip, showIntroCard])
+    if (!isPlayingReel || showIntroCard) return
+    const v = videoRef.current
+    if (!v) return
+    if (v.paused) {
+      if (v.src !== (selectedClip?.url ?? "")) v.src = selectedClip?.url ?? ""
+      v.currentTime = selectedClip?.trimStart ?? 0
+      void v.play().catch(() => {})
+      console.log("[reel] starting clip after intro:", selectedClip?.id?.slice(0, 8))
+    }
+  }, [isPlayingReel, showIntroCard])
 
-  useEffect(() => { if (!selectedClip || !videoRef.current) return; videoRef.current.currentTime = selectedClip.trimStart }, [selectedClip?.id])
+  // Manual clip selection (not during reel): always reset to primary and load the clip.
+  useEffect(() => {
+    if (isPlayingReel) return
+    // Ensure primary is the active element after reel ends or for manual selection
+    if (!activePrimaryRef.current) {
+      activePrimaryRef.current = true
+      videoRef.current = primaryRef.current
+      setActivePrimary(true)
+    }
+    const v = primaryRef.current
+    if (!v || !selectedClip) return
+    if (v.src !== selectedClip.url) v.src = selectedClip.url
+    v.currentTime = selectedClip.trimStart
+  }, [isPlayingReel, selectedClip?.id])
+
   useEffect(() => { if (!selectedClip || !videoRef.current || isPlayingReel) return; videoRef.current.currentTime = selectedClip.trimStart }, [selectedClip?.trimStart, selectedClip?.trimEnd, isPlayingReel])
   useEffect(() => { if (!selectedClip) setVideoCurrentTime(0); else if (videoRef.current) setVideoCurrentTime(videoRef.current.currentTime) }, [selectedClip?.id])
 
@@ -773,52 +908,63 @@ export default function App() {
             {/* Video preview */}
             <div className="mx-auto w-full max-w-2xl">
               <div className={`relative w-full overflow-hidden rounded-xl border border-neutral-700 bg-black ${ASPECT_RATIO_CLASS[aspectRatio]}`}>
-                {isPlayingReel && showIntroCard && introEnabled ? (
+                {/* ── Dual-video: both elements always in DOM for preloading ── */}
+                {/* Primary */}
+                <video
+                  ref={(el) => { primaryRef.current = el; if (activePrimaryRef.current) videoRef.current = el }}
+                  preload="auto"
+                  playsInline
+                  controls={activePrimary && !!selectedClip?.url && !isPlayingReel}
+                  muted={!clipAudioOn || (selectedClip?.muteAudio ?? false)}
+                  className="absolute inset-0 h-full w-full object-contain"
+                  style={{ opacity: (activePrimary && !!selectedClip?.url && !(isPlayingReel && showIntroCard && introEnabled)) ? 1 : 0, pointerEvents: activePrimary ? "auto" : "none" }}
+                  onTimeUpdate={() => { if (activePrimaryRef.current) handleVideoTimeUpdate() }}
+                  onEnded={() => { if (activePrimaryRef.current) handleVideoEnded() }}
+                />
+                {/* Buffer — hidden, preloading next clip */}
+                <video
+                  ref={(el) => { bufferRef.current = el; if (!activePrimaryRef.current) videoRef.current = el }}
+                  preload="auto"
+                  playsInline
+                  controls={!activePrimary && !!selectedClip?.url && !isPlayingReel}
+                  muted={!clipAudioOn || (selectedClip?.muteAudio ?? false)}
+                  className="absolute inset-0 h-full w-full object-contain"
+                  style={{ opacity: (!activePrimary && !!selectedClip?.url && !(isPlayingReel && showIntroCard && introEnabled)) ? 1 : 0, pointerEvents: activePrimary ? "none" : "auto" }}
+                  onTimeUpdate={() => { if (!activePrimaryRef.current) handleVideoTimeUpdate() }}
+                  onEnded={() => { if (!activePrimaryRef.current) handleVideoEnded() }}
+                />
+
+                {/* Intro card overlay */}
+                {isPlayingReel && showIntroCard && introEnabled && (
                   <IntroCard intro={intro} className="absolute inset-0 h-full w-full" />
-                ) : selectedClip?.url ? (
-                  <>
-                    <video ref={videoRef} key={selectedClip.id} src={selectedClip.url}
-                      controls muted={!clipAudioOn || (selectedClip.muteAudio ?? false)}
-                      className="absolute inset-0 h-full w-full object-contain"
-                      onLoadedMetadata={() => { if (videoRef.current) videoRef.current.currentTime = selectedClip.trimStart }}
-                      onTimeUpdate={() => {
-                        if (videoRef.current) setVideoCurrentTime(videoRef.current.currentTime)
-                        if (!isPlayingReel || !videoRef.current) return
-                        if (videoRef.current.currentTime >= selectedClip.trimEnd) {
-                          videoRef.current.pause()
-                          const idx = clips.findIndex((c) => c.id === selectedClip.id)
-                          if (idx + 1 >= clips.length) { setIsPlayingReel(false); return }
-                          setSelectedClipId(clips[idx + 1].id)
-                        }
-                      }}
-                      onEnded={() => {
-                        if (!isPlayingReel) return
-                        const idx = clips.findIndex((c) => c.id === selectedClip.id)
-                        if (idx + 1 >= clips.length) { setIsPlayingReel(false); return }
-                        setSelectedClipId(clips[idx + 1].id)
-                      }} />
-                    {isNormalClip && (
-                      <button type="button" onClick={handleGoalClick}
-                        className="absolute right-3 top-3 z-10 rounded-lg bg-yellow-500 px-3 py-1.5 text-xs font-bold text-black shadow-lg hover:bg-yellow-400">
-                        ⚽ GOAL
-                      </button>
-                    )}
-                    {isNormalClip && selectedClip.showScoreboard && (
-                      <ScoreboardOverlay scoreboard={scoreboard} minuteMarker={selectedClip.minuteMarker ?? ""} goals={goals} clips={clips} clipId={selectedClip.id} currentTimeInClip={videoCurrentTime} showScorerAfterGoal={selectedClip.showScorerAfterGoal} />
-                    )}
-                  </>
-                ) : selectedClip ? (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center text-neutral-500">
-                    <p className="text-sm">Re-upload this clip to restore playback.</p>
-                    <p className="text-xs text-neutral-600">Load project restores settings only.</p>
-                  </div>
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center text-neutral-600">
-                      <svg className="mx-auto mb-3 h-12 w-12 text-neutral-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" /></svg>
-                      <p className="text-sm">Upload clips to get started</p>
+                )}
+
+                {/* Placeholders */}
+                {!selectedClip?.url && !isPlayingReel && (
+                  selectedClip ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center text-neutral-500">
+                      <p className="text-sm">Re-upload this clip to restore playback.</p>
+                      <p className="text-xs text-neutral-600">Load project restores settings only.</p>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="text-center text-neutral-600">
+                        <svg className="mx-auto mb-3 h-12 w-12 text-neutral-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" /></svg>
+                        <p className="text-sm">Upload clips to get started</p>
+                      </div>
+                    </div>
+                  )
+                )}
+
+                {/* Goal button — only when a clip is visible */}
+                {selectedClip?.url && isNormalClip && !(isPlayingReel && showIntroCard) && (
+                  <button type="button" onClick={handleGoalClick}
+                    className="absolute right-3 top-3 z-10 rounded-lg bg-yellow-500 px-3 py-1.5 text-xs font-bold text-black shadow-lg hover:bg-yellow-400">
+                    ⚽ GOAL
+                  </button>
+                )}
+                {selectedClip?.url && isNormalClip && selectedClip.showScoreboard && (
+                  <ScoreboardOverlay scoreboard={scoreboard} minuteMarker={selectedClip.minuteMarker ?? ""} goals={goals} clips={clips} clipId={selectedClip.id} currentTimeInClip={videoCurrentTime} showScorerAfterGoal={selectedClip.showScorerAfterGoal} />
                 )}
               </div>
             </div>
