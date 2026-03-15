@@ -163,7 +163,12 @@ export function projectJsonToHighlightReelData(
       src,
       trimStart: typeof pc.trimStart === "number" ? pc.trimStart : 0,
       trimEnd: typeof pc.trimEnd === "number" ? pc.trimEnd : undefined,
-      durationSeconds: typeof pc.duration === "number" ? pc.duration : undefined,
+      // Do NOT forward pc.duration (full source file length) as durationSeconds.
+      // getClipDurationSeconds() derives the reel duration from trimEnd − trimStart,
+      // which is the correct trimmed length. Passing the raw file duration here
+      // causes each Sequence to span the full source length even for trimmed clips,
+      // resulting in frozen last-frame video for the remainder.
+      durationSeconds: undefined,
       name: pc.name ?? undefined,
       showScoreboard: pc.showScoreboard,
       minuteMarker: pc.minuteMarker,
