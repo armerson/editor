@@ -1,15 +1,21 @@
 {
-  "name": "backend",
+  "name": "highlight-editor-backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Backend render server for football highlight editor",
+  "main": "server.js",
+  "type": "commonjs",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "echo \"No tests configured\""
   },
-  "keywords": [],
+  "keywords": [
+    "remotion",
+    "video-render",
+    "football-highlights"
+  ],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
     "@remotion/renderer": "^4.0.435",
     "cors": "^2.8.6",
