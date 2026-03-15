@@ -13,6 +13,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import { useState } from "react"
 import type { Clip, ClipRole, GoalEvent } from "../types"
 
 function formatTime(seconds: number): string {
@@ -165,7 +166,9 @@ type Props = {
   onReorder: (from: number, to: number) => void
 }
 
-const PIXELS_PER_SECOND = 36
+const MIN_PX_PER_SEC = 20
+const MAX_PX_PER_SEC = 120
+const DEFAULT_PX_PER_SEC = 36
 
 export function TimelineTrack({
   clips,
@@ -176,6 +179,8 @@ export function TimelineTrack({
   onSelectClip,
   onReorder,
 }: Props) {
+  const [pxPerSec, setPxPerSec] = useState(DEFAULT_PX_PER_SEC)
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   )
@@ -186,7 +191,7 @@ export function TimelineTrack({
     0
   )
   const totalReelDuration = introDuration + clipsTrimmedDuration
-  const timelineWidthPx = Math.max(totalReelDuration * PIXELS_PER_SECOND, 320)
+  const timelineWidthPx = Math.max(totalReelDuration * pxPerSec, 320)
 
   const goalMarkers = buildGoalMarkers(goals, clips, introDuration)
 
@@ -212,7 +217,26 @@ export function TimelineTrack({
   }
 
   return (
-    <div className="overflow-x-auto pb-2">
+    <div>
+      {/* Zoom control */}
+      <div className="mb-1.5 flex items-center gap-2">
+        <svg className="h-3 w-3 shrink-0 text-neutral-500" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+          <path d="M6.5 1a5.5 5.5 0 100 11A5.5 5.5 0 006.5 1zM0 6.5a6.5 6.5 0 1111.56 4.06l3.69 3.69a.75.75 0 11-1.06 1.06l-3.69-3.69A6.5 6.5 0 010 6.5zM5 4.75a.75.75 0 011.5 0V6h1.25a.75.75 0 010 1.5H6.5v1.25a.75.75 0 01-1.5 0V7.5H3.75a.75.75 0 010-1.5H5V4.75z" />
+        </svg>
+        <input
+          type="range"
+          min={MIN_PX_PER_SEC}
+          max={MAX_PX_PER_SEC}
+          step={4}
+          value={pxPerSec}
+          onChange={(e) => setPxPerSec(Number(e.target.value))}
+          className="h-1 w-24 cursor-pointer accent-yellow-500"
+          title={`Timeline zoom: ${pxPerSec}px/s`}
+        />
+        <span className="text-[10px] tabular-nums text-neutral-500">{totalReelDuration > 0 ? `${Math.round(totalReelDuration)}s` : ""}</span>
+      </div>
+
+      <div className="overflow-x-auto pb-2">
       <div
         className="relative"
         style={{ width: timelineWidthPx, minWidth: "100%" }}
@@ -314,6 +338,7 @@ export function TimelineTrack({
           </div>
         )}
       </div>
+    </div>
     </div>
   )
 }

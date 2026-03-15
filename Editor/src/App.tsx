@@ -56,6 +56,7 @@ export default function App() {
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null)
   const [isPlayingReel, setIsPlayingReel] = useState(false)
   const [showIntroCard, setShowIntroCard] = useState(false)
+  const [introEnabled, setIntroEnabled] = useState(true)
   const [intro, setIntro] = useState<IntroData>(() => ({ ...DEFAULT_INTRO }))
   const [scoreboard, setScoreboard] = useState<ScoreboardData>(() => ({
     homeTeamName: DEFAULT_INTRO.teamName,
@@ -119,8 +120,9 @@ export default function App() {
   const selectedClip = clips.find((c) => c.id === selectedClipId) ?? clips[0] ?? null
   /** True when the selected clip is a "normal" gameplay clip (not intro/outro). */
   const isNormalClip = !selectedClip?.role || selectedClip.role === "normal"
+  const effectiveIntroDuration = introEnabled ? intro.durationSeconds : 0
   const totalReelDuration =
-    intro.durationSeconds + clips.reduce((s, c) => s + Math.max(0, c.trimEnd - c.trimStart), 0)
+    effectiveIntroDuration + clips.reduce((s, c) => s + Math.max(0, c.trimEnd - c.trimStart), 0)
 
   // ── Serialisation ──────────────────────────────────────────────────────────
 
@@ -147,6 +149,8 @@ export default function App() {
         ...intro,
         homeBadgeUrl: intro.homeBadgeUrl.startsWith("http") ? intro.homeBadgeUrl : "",
         awayBadgeUrl: intro.awayBadgeUrl.startsWith("http") ? intro.awayBadgeUrl : "",
+        // durationSeconds: 0 signals the renderer to skip the intro entirely.
+        durationSeconds: introEnabled ? intro.durationSeconds : 0,
       },
       scoreboard: { ...scoreboard },
       goals: [...goals],
@@ -168,6 +172,8 @@ export default function App() {
   function applyProjectToState(project: ProjectData) {
     setProjectTitle(project.projectTitle)
     setAspectRatio((project.presetId as AspectRatioPreset | undefined) ?? "landscape")
+    // durationSeconds === 0 means intro was disabled when the project was saved.
+    setIntroEnabled((project.intro.durationSeconds ?? 1) > 0)
     setClips(
       project.clips.map((c) => ({
         ...c,
@@ -468,7 +474,9 @@ export default function App() {
 
   const handlePlayReel = () => {
     if (clips.length === 0) return
-    setShowIntroCard(true); setIsPlayingReel(true); setSelectedClipId(null); setCurrentReelTime(0)
+    // Skip intro card in preview when intro is disabled.
+    setShowIntroCard(introEnabled); setIsPlayingReel(true)
+    setSelectedClipId(introEnabled ? null : (clips[0]?.id ?? null)); setCurrentReelTime(0)
     reelStartTimeRef.current = performance.now()
     musicStartedThisReelRef.current = false; fadeOutStartedRef.current = false
   }
@@ -509,9 +517,9 @@ export default function App() {
 
   useEffect(() => {
     if (!isPlayingReel || !showIntroCard || clips.length === 0) return
-    const t = setTimeout(() => { setShowIntroCard(false); setSelectedClipId(clips[0].id) }, intro.durationSeconds * 1000)
+    const t = setTimeout(() => { setShowIntroCard(false); setSelectedClipId(clips[0].id) }, effectiveIntroDuration * 1000)
     return () => clearTimeout(t)
-  }, [isPlayingReel, showIntroCard, clips, intro.durationSeconds])
+  }, [isPlayingReel, showIntroCard, clips, effectiveIntroDuration])
 
   useEffect(() => {
     if (!isPlayingReel || !selectedClip || !videoRef.current || showIntroCard) return
@@ -527,12 +535,15 @@ export default function App() {
     if (isPlayingReel) return
     if (!selectedClip || clips.length === 0) { setCurrentReelTime(0); return }
     const beforeSelected = clips.findIndex((c) => c.id === selectedClip.id)
-    const timeBeforeSelected = intro.durationSeconds + clips.slice(0, beforeSelected).reduce((s, c) => s + Math.max(0, c.trimEnd - c.trimStart), 0)
+    const timeBeforeSelected = effectiveIntroDuration + clips.slice(0, beforeSelected).reduce((s, c) => s + Math.max(0, c.trimEnd - c.trimStart), 0)
     const timeInClip = Math.max(0, Math.min(videoCurrentTime - selectedClip.trimStart, selectedClip.trimEnd - selectedClip.trimStart))
     setCurrentReelTime(timeBeforeSelected + timeInClip)
-  }, [isPlayingReel, selectedClip?.id, videoCurrentTime, clips, intro.durationSeconds])
+  }, [isPlayingReel, selectedClip?.id, videoCurrentTime, clips, effectiveIntroDuration])
 
-  useEffect(() => { if (!videoRef.current) return; videoRef.current.volume = clipAudioOn ? 1 : 0 }, [clipAudioOn, selectedClip?.id])
+  useEffect(() => {
+    if (!videoRef.current) return
+    videoRef.current.volume = (clipAudioOn && !(selectedClip?.muteAudio ?? false)) ? 1 : 0
+  }, [clipAudioOn, selectedClip?.id, selectedClip?.muteAudio])
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -654,8 +665,17 @@ export default function App() {
 
           {/* Match & Intro */}
           <div className="mb-4 rounded-xl border border-neutral-800 bg-neutral-900 p-4">
-            <h2 className="mb-3 text-sm font-semibold text-neutral-200">Match & Intro</h2>
-            <div className="space-y-2.5">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-neutral-200">Match & Intro</h2>
+              <label className="flex cursor-pointer items-center gap-2">
+                <span className="text-[10px] text-neutral-400">{introEnabled ? "Enabled" : "Disabled"}</span>
+                <button type="button" onClick={() => setIntroEnabled((v) => !v)}
+                  className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${introEnabled ? "bg-yellow-500" : "bg-neutral-600"}`}>
+                  <span className={`inline-block h-3 w-3 rounded-full bg-white shadow transition-transform ${introEnabled ? "translate-x-4" : "translate-x-0.5"}`} />
+                </button>
+              </label>
+            </div>
+            <div className={`space-y-2.5 ${introEnabled ? "" : "pointer-events-none opacity-40"}`}>
               {[
                 { label: "Team name", key: "teamName" as const, placeholder: "Ambassadors FC" },
                 { label: "Opponent", key: "opponent" as const, placeholder: "Rivals United" },
@@ -746,12 +766,12 @@ export default function App() {
             {/* Video preview */}
             <div className="mx-auto w-full max-w-2xl">
               <div className={`relative w-full overflow-hidden rounded-xl border border-neutral-700 bg-black ${ASPECT_RATIO_CLASS[aspectRatio]}`}>
-                {isPlayingReel && showIntroCard ? (
+                {isPlayingReel && showIntroCard && introEnabled ? (
                   <IntroCard intro={intro} className="absolute inset-0 h-full w-full" />
                 ) : selectedClip?.url ? (
                   <>
                     <video ref={videoRef} key={selectedClip.id} src={selectedClip.url}
-                      controls muted={!clipAudioOn}
+                      controls muted={!clipAudioOn || (selectedClip.muteAudio ?? false)}
                       className="absolute inset-0 h-full w-full object-contain"
                       onLoadedMetadata={() => { if (videoRef.current) videoRef.current.currentTime = selectedClip.trimStart }}
                       onTimeUpdate={() => {
@@ -944,7 +964,7 @@ export default function App() {
               </p>
             </div>
             <TimelineTrack clips={clips} goals={goals} selectedClipId={selectedClipId}
-              currentReelTime={currentReelTime} introDurationSeconds={intro.durationSeconds}
+              currentReelTime={currentReelTime} introDurationSeconds={effectiveIntroDuration}
               onSelectClip={handleSelectClip} onReorder={handleReorderClips} />
           </div>
 

@@ -7,7 +7,7 @@ type Props = {
 
 function BadgePlaceholder({ label }: { label: string }) {
   return (
-    <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-neutral-600 bg-neutral-800 text-neutral-500 sm:h-24 sm:w-24">
+    <div className="flex h-28 w-28 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-neutral-600 bg-neutral-800 text-neutral-500 sm:h-32 sm:w-32">
       <span className="text-xs">{label}</span>
     </div>
   )
@@ -18,7 +18,7 @@ function BadgeImg({ src, alt }: { src: string; alt: string }) {
     <img
       src={src}
       alt={alt}
-      className="h-20 w-20 shrink-0 rounded-full border-2 border-neutral-600 object-cover sm:h-24 sm:w-24"
+      className="h-28 w-28 shrink-0 rounded-full border-2 border-neutral-600 object-contain sm:h-32 sm:w-32"
     />
   )
 }

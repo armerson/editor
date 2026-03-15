@@ -186,7 +186,9 @@ const MusicTrack: React.FC<{
 export function getHighlightReelDurationInFrames(props: HighlightReelProps): number {
   const fps = props.fps ?? FPS;
   let total = 0;
-  total += Math.ceil((props.intro?.durationSeconds ?? 3) * fps);
+  // durationSeconds === 0 means the intro was disabled by the editor.
+  const introDuration = props.intro?.durationSeconds ?? 3;
+  if (introDuration > 0) total += Math.ceil(introDuration * fps);
   const clips = (props.clips ?? []).filter((c) => c.src?.trim());
   for (const clip of clips) {
     total += Math.ceil(getClipDurationSeconds(clip) * fps);
@@ -196,7 +198,8 @@ export function getHighlightReelDurationInFrames(props: HighlightReelProps): num
 
 export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
   const fps = props.fps ?? FPS;
-  const introDurationFrames = Math.ceil((props.intro?.durationSeconds ?? 3) * fps);
+  const introDuration = props.intro?.durationSeconds ?? 3;
+  const introDurationFrames = introDuration > 0 ? Math.ceil(introDuration * fps) : 0;
 
   const allClips = props.clips ?? [];
   const clips = allClips.filter((c) => c.src?.trim());
@@ -219,10 +222,12 @@ export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
 
   return (
     <AbsoluteFill>
-      {/* Intro card */}
-      <Sequence from={0} durationInFrames={introDurationFrames} name="Intro">
-        <IntroCard {...props.intro} durationFrames={introDurationFrames} />
-      </Sequence>
+      {/* Intro card — skipped entirely when durationSeconds is 0 (disabled in editor) */}
+      {introDurationFrames > 0 && (
+        <Sequence from={0} durationInFrames={introDurationFrames} name="Intro">
+          <IntroCard {...props.intro} durationFrames={introDurationFrames} />
+        </Sequence>
+      )}
 
       {/* Ordered video clips with trim — use clip.src from project JSON */}
       {clips.map((clip, index) => {

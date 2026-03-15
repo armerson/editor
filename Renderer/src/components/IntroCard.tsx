@@ -62,7 +62,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
             <Img
               src={effectiveHomeBadge!}
-              style={{ width: 96, height: 96, objectFit: 'contain' }}
+              style={{ width: 160, height: 160, objectFit: 'contain' }}
             />
             <span
               style={{
@@ -91,7 +91,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
             <Img
               src={effectiveAwayBadge!}
-              style={{ width: 96, height: 96, objectFit: 'contain' }}
+              style={{ width: 160, height: 160, objectFit: 'contain' }}
             />
             {subtitle && (
               <span
@@ -115,7 +115,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
         <div style={{ marginBottom: 24 }}>
           <Img
             src={singleBadge!}
-            style={{ maxWidth: 200, maxHeight: 120, objectFit: 'contain' }}
+            style={{ maxWidth: 240, maxHeight: 200, objectFit: 'contain' }}
           />
         </div>
       ) : null}
