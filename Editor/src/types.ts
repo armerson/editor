@@ -45,6 +45,8 @@ export type Clip = {
   showScorerAfterGoal: boolean
   /** Defaults to "normal". intro/outro clips never show scoreboard, scorer or GOAL button. */
   role?: ClipRole
+  /** When true the clip's original audio track is silenced in the final render. */
+  muteAudio?: boolean
 }
 
 /** Output format preset sent to the renderer */
@@ -67,6 +69,8 @@ export type ProjectData = {
     showScorerAfterGoal: boolean
     /** Defaults to "normal" if absent (backward compat). */
     role?: ClipRole
+    /** When true the clip's original audio track is silenced in the final render. */
+    muteAudio?: boolean
     src?: string
   }>
   intro: IntroData

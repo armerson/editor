@@ -64,7 +64,7 @@ function ClipCell({ clip, isSelected, hasGoals, widthPx, onSelect }: ClipCellPro
     transform: CSS.Transform.toString(transform),
     transition,
     width: widthPx,
-    minWidth: Math.min(72, widthPx),
+    minWidth: Math.min(56, widthPx),
     opacity: isDragging ? 0.5 : 1,
   }
 
@@ -94,7 +94,7 @@ function ClipCell({ clip, isSelected, hasGoals, widthPx, onSelect }: ClipCellPro
       )}
 
       {/* Thumbnail */}
-      <div className="relative h-12 w-full overflow-hidden bg-neutral-800">
+      <div className="relative h-8 w-full overflow-hidden bg-neutral-800">
         {clip.thumbnail ? (
           <img
             src={clip.thumbnail}
@@ -165,7 +165,7 @@ type Props = {
   onReorder: (from: number, to: number) => void
 }
 
-const PIXELS_PER_SECOND = 60
+const PIXELS_PER_SECOND = 36
 
 export function TimelineTrack({
   clips,
@@ -218,7 +218,7 @@ export function TimelineTrack({
         style={{ width: timelineWidthPx, minWidth: "100%" }}
       >
         {/* Time ruler */}
-        <div className="relative mb-1 h-6 border-b border-neutral-700 bg-neutral-950">
+        <div className="relative mb-1 h-5 border-b border-neutral-700 bg-neutral-950">
           {ticks.map((t) => (
             <div
               key={t}
@@ -258,8 +258,8 @@ export function TimelineTrack({
                   const trimmedDuration = Math.max(0, clip.trimEnd - clip.trimStart)
                   const widthPx =
                     totalReelDuration > 0
-                      ? Math.max(72, (trimmedDuration / totalReelDuration) * timelineWidthPx)
-                      : 120
+                      ? Math.max(56, (trimmedDuration / totalReelDuration) * timelineWidthPx)
+                      : 80
                   const hasGoals = goals.some((g) => g.clipId === clip.id)
                   return (
                     <ClipCell
@@ -293,7 +293,7 @@ export function TimelineTrack({
                 <div className="rounded bg-yellow-500/90 px-1 py-0.5 text-[9px] font-bold text-black leading-none whitespace-nowrap">
                   ⚽
                 </div>
-                <div className="h-full w-px bg-yellow-500/60" style={{ height: 56 }} />
+                <div className="h-full w-px bg-yellow-500/60" style={{ height: 40 }} />
               </div>
             </div>
           )

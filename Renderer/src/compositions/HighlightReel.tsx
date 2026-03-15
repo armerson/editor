@@ -221,7 +221,7 @@ export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
     <AbsoluteFill>
       {/* Intro card */}
       <Sequence from={0} durationInFrames={introDurationFrames} name="Intro">
-        <IntroCard {...props.intro} />
+        <IntroCard {...props.intro} durationFrames={introDurationFrames} />
       </Sequence>
 
       {/* Ordered video clips with trim — use clip.src from project JSON */}
@@ -241,7 +241,9 @@ export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
               trimStart={clip.trimStart ?? 0}
               trimEnd={clip.trimEnd}
               fps={fps}
+              durationFrames={durationFrames}
               clipAudioOn={props.music?.clipAudioOn ?? false}
+              muteAudio={clip.muteAudio ?? false}
             />
           </Sequence>
         );

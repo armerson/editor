@@ -139,6 +139,7 @@ export default function App() {
         minuteMarker: c.minuteMarker,
         showScorerAfterGoal: c.showScorerAfterGoal,
         role: c.role ?? "normal",
+        muteAudio: c.muteAudio ?? false,
         ...(c.url.startsWith("http") ? { src: c.url } : {}),
         ...(c.thumbnail.startsWith("http") ? { thumbnail: c.thumbnail } : {}),
       })),
@@ -173,6 +174,7 @@ export default function App() {
         url: c.src ?? "",
         thumbnail: c.thumbnail ?? "",
         role: (c.role ?? "normal") as ClipRole,
+        muteAudio: c.muteAudio ?? false,
       }))
     )
     // Backward compat: old projects use clubBadgeUrl; map it to homeBadgeUrl.
@@ -332,7 +334,7 @@ export default function App() {
         id, name: file.name, url: URL.createObjectURL(file), thumbnail,
         duration: safeDuration, trimStart: 0, trimEnd: safeDuration,
         showScoreboard: true, minuteMarker: "", showScorerAfterGoal: true,
-        role: "normal" as ClipRole,
+        role: "normal" as ClipRole, muteAudio: false,
       })
     }
     setClips((prev) => {
@@ -385,6 +387,9 @@ export default function App() {
 
   const setClipRole = (clipId: string, role: ClipRole) =>
     setClips((prev) => prev.map((c) => c.id === clipId ? { ...c, role } : c))
+
+  const setClipMuteAudio = (clipId: string, mute: boolean) =>
+    setClips((prev) => prev.map((c) => c.id === clipId ? { ...c, muteAudio: mute } : c))
 
   // ── Goals ──────────────────────────────────────────────────────────────────
 
@@ -827,6 +832,21 @@ export default function App() {
                     <span className="text-[10px] text-neutral-500">Scoreboard &amp; goals disabled</span>
                   )}
                 </div>
+
+                {/* Mute audio */}
+                <label className="mb-3 flex cursor-pointer items-center justify-between gap-3">
+                  <span className="flex items-center gap-1.5 text-xs text-neutral-300">
+                    <svg className="h-3.5 w-3.5 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      {selectedClip.muteAudio
+                        ? <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                        : <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072M12 6v12m0-12L7.757 9.757A1 1 0 017 10.414H5a1 1 0 00-1 1v1.172a1 1 0 001 1H7a1 1 0 01.707.293L12 18m0-12v12" />}
+                    </svg>
+                    Mute clip audio
+                  </span>
+                  <input type="checkbox" checked={selectedClip.muteAudio ?? false}
+                    onChange={(e) => setClipMuteAudio(selectedClip.id, e.target.checked)}
+                    className="h-3.5 w-3.5 rounded accent-yellow-500" />
+                </label>
 
                 {/* Trim */}
                 <div className="grid grid-cols-2 gap-4">

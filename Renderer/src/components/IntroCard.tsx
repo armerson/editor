@@ -1,8 +1,14 @@
 import React from 'react';
-import { AbsoluteFill, Img } from 'remotion';
+import { AbsoluteFill, Img, useCurrentFrame, interpolate } from 'remotion';
 import type { IntroCardData } from '../types/reel';
 
-type IntroCardProps = IntroCardData;
+/** Frames for fade-in/out — matches ClipSegment for seamless dissolves. */
+const TRANSITION_FRAMES = 15;
+
+type IntroCardProps = IntroCardData & {
+  /** Total duration of the intro in frames — used to time the fade-out. */
+  durationFrames: number;
+};
 
 export const IntroCard: React.FC<IntroCardProps> = ({
   title,
@@ -11,7 +17,18 @@ export const IntroCard: React.FC<IntroCardProps> = ({
   awayBadgeUrl,
   imageUrl,
   backgroundColor = '#0a0a0a',
+  durationFrames,
 }) => {
+  const frame = useCurrentFrame();
+
+  // Fade in at the very start, fade out at the end into the first clip.
+  const opacity = interpolate(
+    frame,
+    [0, TRANSITION_FRAMES, Math.max(TRANSITION_FRAMES, durationFrames - TRANSITION_FRAMES), durationFrames],
+    [0, 1, 1, 0],
+    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+  );
+
   // Prefer explicit homeBadgeUrl; fall back to legacy imageUrl for old projects.
   const effectiveHomeBadge = homeBadgeUrl || imageUrl || null;
   const effectiveAwayBadge = awayBadgeUrl || null;
@@ -28,6 +45,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
         alignItems: 'center',
         padding: 48,
         flexDirection: 'column',
+        opacity,
       }}
     >
       {/* Dual badge layout */}
