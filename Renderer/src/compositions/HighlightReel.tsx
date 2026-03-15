@@ -86,8 +86,8 @@ const CumulativeScoreboard: React.FC<{
     if (g.side === 'away') away += 1;
   }
 
-  // Show scorer callout briefly after the goal happens.
-  const showScorerForFrames = Math.round(2.5 * fps);
+  // Show scorer callout for 5 seconds after the goal happens (matches editor preview).
+  const showScorerForFrames = Math.round(5 * fps);
   const scorer =
     lastGoal && frame - lastGoal.atFrame >= 0 && frame - lastGoal.atFrame <= showScorerForFrames
       ? lastGoal
@@ -107,11 +107,22 @@ const CumulativeScoreboard: React.FC<{
     }
   }
 
-  const clipShowScoreboard =
-    currentClip?.showScoreboard === undefined ? true : Boolean(currentClip.showScoreboard);
+  // Intro/outro clips must never show scoreboard or scorer — enforced here in
+  // the renderer regardless of per-clip showScoreboard / showScorerAfterGoal flags.
+  const isNonNormalClip =
+    currentClip?.role === 'intro' || currentClip?.role === 'outro';
+
+  const clipShowScoreboard = isNonNormalClip
+    ? false
+    : currentClip?.showScoreboard === undefined
+      ? true
+      : Boolean(currentClip.showScoreboard);
   const clipMinuteMarker = currentClip?.minuteMarker;
-  const clipAllowsScorer =
-    currentClip?.showScorerAfterGoal === undefined ? true : Boolean(currentClip.showScorerAfterGoal);
+  const clipAllowsScorer = isNonNormalClip
+    ? false
+    : currentClip?.showScorerAfterGoal === undefined
+      ? true
+      : Boolean(currentClip.showScorerAfterGoal);
 
   // Default false: only show when the adapter explicitly set visible: true.
   // ?? true would render a blank overlay (0–0, no team names) when scoreboard is undefined.

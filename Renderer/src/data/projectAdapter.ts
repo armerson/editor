@@ -24,6 +24,8 @@ export type ProjectClip = {
   duration?: number
   trimStart?: number
   trimEnd?: number
+  /** Clip role: 'normal' | 'intro' | 'outro' — absent means 'normal' */
+  role?: string
   showScoreboard?: boolean
   minuteMarker?: string
   showScorerAfterGoal?: boolean
@@ -37,7 +39,12 @@ export type ProjectIntro = {
   score?: string
   matchDate?: string
   ageGroup?: string
+  /** Legacy single-badge field — maps to homeBadgeUrl when homeBadgeUrl is absent */
   clubBadgeUrl?: string
+  /** Home team badge URL */
+  homeBadgeUrl?: string
+  /** Away team badge URL */
+  awayBadgeUrl?: string
   durationSeconds?: number
   [key: string]: unknown
 }
@@ -158,6 +165,10 @@ export function projectJsonToHighlightReelData(
     const src = resolveClipSrc(pc, videoBasePath)
     if (!src) continue
 
+    // Normalise role — only pass through recognised values; absent/unknown → 'normal'
+    const role =
+      pc.role === "intro" || pc.role === "outro" ? pc.role : "normal"
+
     clips.push({
       id: pc.id,
       src,
@@ -170,6 +181,7 @@ export function projectJsonToHighlightReelData(
       // resulting in frozen last-frame video for the remainder.
       durationSeconds: undefined,
       name: pc.name ?? undefined,
+      role,
       showScoreboard: pc.showScoreboard,
       minuteMarker: pc.minuteMarker,
       showScorerAfterGoal: pc.showScorerAfterGoal,
@@ -183,11 +195,20 @@ export function projectJsonToHighlightReelData(
     project.intro?.ageGroup,
   ].filter(Boolean)
 
+  // Dual badge support: prefer homeBadgeUrl / awayBadgeUrl; fall back to legacy
+  // clubBadgeUrl (which maps to homeBadgeUrl for backward compatibility).
+  const homeBadge =
+    project.intro?.homeBadgeUrl?.trim() || project.intro?.clubBadgeUrl?.trim() || undefined
+  const awayBadge = project.intro?.awayBadgeUrl?.trim() || undefined
+
   const intro: IntroCardData = {
     title: project.intro?.teamName ?? "Highlights",
     subtitle: introParts.length > 0 ? introParts.join(" · ") : undefined,
     durationSeconds: project.intro?.durationSeconds ?? 3,
-    imageUrl: project.intro?.clubBadgeUrl,
+    homeBadgeUrl: homeBadge,
+    awayBadgeUrl: awayBadge,
+    // Keep legacy imageUrl populated so old renderer IntroCard builds still work.
+    imageUrl: homeBadge,
     backgroundColor: "#0a0a0a",
   }
 

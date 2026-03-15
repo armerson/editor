@@ -8,11 +8,22 @@ export type IntroCardData = {
   title: string;
   subtitle?: string;
   durationSeconds: number;
-  /** Optional image or logo URL (e.g. team logo) */
+  /** Home team badge URL — shown beside the home team name */
+  homeBadgeUrl?: string;
+  /** Away team badge URL — shown beside the away team name */
+  awayBadgeUrl?: string;
+  /**
+   * Legacy single-badge field — kept for backward compatibility.
+   * If set and homeBadgeUrl is absent, this is used as the home badge.
+   * @deprecated Use homeBadgeUrl instead.
+   */
   imageUrl?: string;
   /** Optional background color hex */
   backgroundColor?: string;
 };
+
+/** Role of a clip in the reel */
+export type ClipRole = 'normal' | 'intro' | 'outro';
 
 /** A single video clip with optional trim (in seconds) */
 export type ClipData = {
@@ -28,6 +39,11 @@ export type ClipData = {
   durationSeconds?: number;
   /** Optional label for timeline / debugging */
   name?: string;
+  /**
+   * Clip role. 'intro' and 'outro' clips never show scoreboard, scorer text, or
+   * receive goal events. Defaults to 'normal' when absent.
+   */
+  role?: ClipRole;
   /** Whether the scoreboard should be visible while this clip plays (defaults to true if undefined). */
   showScoreboard?: boolean;
   /** Label for the current match time/period while this clip plays, e.g. "12'" or "2nd half 34'". */
