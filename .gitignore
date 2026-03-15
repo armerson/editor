@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+**/dist/
+.next/
+
+# Remotion bundle cache
+**/public/bundle/
+
+# Render output
+renders/
+**/*.mp4
+
+# Environment — never commit secrets
+.env
+**/.env
+
+# macOS
+.DS_Store
+**/.DS_Store

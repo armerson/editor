@@ -1,0 +1,113 @@
+/**
+ * Types for highlight reel render data.
+ * Designed to match editor export JSON so you can pass your editor output directly.
+ */
+
+/** Intro card shown at the start of the reel */
+export type IntroCardData = {
+  title: string;
+  subtitle?: string;
+  durationSeconds: number;
+  /** Optional image or logo URL (e.g. team logo) */
+  imageUrl?: string;
+  /** Optional background color hex */
+  backgroundColor?: string;
+};
+
+/** A single video clip with optional trim (in seconds) */
+export type ClipData = {
+  /** Stable ID from the editor project JSON (used to associate goals with clips). */
+  id?: string;
+  /** URL or path to the video file (staticFile() or full URL) */
+  src: string;
+  /** Trim start in seconds from the beginning of the source video */
+  trimStart?: number;
+  /** Trim end in seconds; clip plays from trimStart to trimEnd */
+  trimEnd?: number;
+  /** Duration to show this clip in the reel (seconds). If omitted, uses (trimEnd - trimStart) or full clip length */
+  durationSeconds?: number;
+  /** Optional label for timeline / debugging */
+  name?: string;
+  /** Whether the scoreboard should be visible while this clip plays (defaults to true if undefined). */
+  showScoreboard?: boolean;
+  /** Label for the current match time/period while this clip plays, e.g. "12'" or "2nd half 34'". */
+  minuteMarker?: string;
+  /** Whether to show the scorer callout overlay after goals that occur in this clip (defaults to true if undefined). */
+  showScorerAfterGoal?: boolean;
+};
+
+export type GoalSide = 'home' | 'away';
+
+/** A goal event as authored in the editor project JSON. */
+export type GoalEvent = {
+  id?: string;
+  /** References the clip that contains this goal. */
+  clipId: string;
+  /** Time (seconds) into the clip where the goal occurs. */
+  timeInClip: number;
+  side: GoalSide;
+  scorerName?: string;
+};
+
+/** Global music track played across the whole reel */
+export type MusicTrackData = {
+  /** URL or path to the audio file */
+  src: string;
+  /** Volume 0–1 */
+  volume?: number;
+  /** Source-track offset in seconds (skips this many seconds into the audio file before playing) */
+  trimStart?: number;
+  /** Reel-timeline start in seconds (music begins this many seconds into the reel; default 0) */
+  startInReel?: number;
+  /** Reel-timeline end in seconds (music stops at this point in the reel; default: end of reel) */
+  endInReel?: number;
+  /** Seconds over which music fades to silence before endInReel (or end of reel) */
+  fadeOutDuration?: number;
+  /** If true, play original clip audio (unmute clips). Default false. */
+  clipAudioOn?: boolean;
+  /** If true, loop the music to fill the reel */
+  loop?: boolean;
+};
+
+/** Scoreboard overlay (e.g. team names, score, clock) */
+export type ScoreboardOverlayData = {
+  visible?: boolean;
+  homeTeamName?: string;
+  awayTeamName?: string;
+  homeScore?: number;
+  awayScore?: number;
+  /** e.g. "Q3 4:32" or "45'" */
+  clockOrPeriod?: string;
+  /** Custom label */
+  label?: string;
+  /** Optional: show a scorer callout when a goal happens. */
+  scorerName?: string;
+  scorerSide?: GoalSide;
+};
+
+/** Lower-thirds overlay (e.g. player name, title) */
+export type LowerThirdsOverlayData = {
+  visible?: boolean;
+  title?: string;
+  subtitle?: string;
+  /** Optional image URL */
+  imageUrl?: string;
+};
+
+/** Full highlight reel input — matches editor export shape */
+export type HighlightReelData = {
+  /** Intro card shown first */
+  intro: IntroCardData;
+  /** Ordered list of video clips */
+  clips: ClipData[];
+  /** Goal events (used for cumulative scoreboard) */
+  goals?: GoalEvent[];
+  /** Optional global music track */
+  music?: MusicTrackData;
+  /** Optional scoreboard overlay (can be shown per-clip later; here we have one global config) */
+  scoreboard?: ScoreboardOverlayData;
+  /** Optional lower-thirds overlay config */
+  lowerThirds?: LowerThirdsOverlayData;
+  /** Optional FPS override (default 30) */
+  fps?: number;
+};
