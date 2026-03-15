@@ -1,0 +1,9 @@
+[build]
+builder       = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath    = "/healthz"
+healthcheckTimeout = 300          # seconds — Remotion first-bundle takes ~2 min
+restartPolicyType  = "on_failure"
+restartPolicyMaxRetries = 3

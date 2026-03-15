@@ -86,8 +86,8 @@ const CumulativeScoreboard: React.FC<{
     if (g.side === 'away') away += 1;
   }
 
-  // Show scorer callout briefly after the goal happens.
-  const showScorerForFrames = Math.round(2.5 * fps);
+  // Show scorer callout for 5 seconds after the goal happens (matches editor preview).
+  const showScorerForFrames = Math.round(5 * fps);
   const scorer =
     lastGoal && frame - lastGoal.atFrame >= 0 && frame - lastGoal.atFrame <= showScorerForFrames
       ? lastGoal
@@ -107,13 +107,26 @@ const CumulativeScoreboard: React.FC<{
     }
   }
 
-  const clipShowScoreboard =
-    currentClip?.showScoreboard === undefined ? true : Boolean(currentClip.showScoreboard);
-  const clipMinuteMarker = currentClip?.minuteMarker;
-  const clipAllowsScorer =
-    currentClip?.showScorerAfterGoal === undefined ? true : Boolean(currentClip.showScorerAfterGoal);
+  // Intro/outro clips must never show scoreboard or scorer — enforced here in
+  // the renderer regardless of per-clip showScoreboard / showScorerAfterGoal flags.
+  const isNonNormalClip =
+    currentClip?.role === 'intro' || currentClip?.role === 'outro';
 
-  const visible = (scoreboard?.visible ?? true) && clipShowScoreboard;
+  const clipShowScoreboard = isNonNormalClip
+    ? false
+    : currentClip?.showScoreboard === undefined
+      ? true
+      : Boolean(currentClip.showScoreboard);
+  const clipMinuteMarker = currentClip?.minuteMarker;
+  const clipAllowsScorer = isNonNormalClip
+    ? false
+    : currentClip?.showScorerAfterGoal === undefined
+      ? true
+      : Boolean(currentClip.showScorerAfterGoal);
+
+  // Default false: only show when the adapter explicitly set visible: true.
+  // ?? true would render a blank overlay (0–0, no team names) when scoreboard is undefined.
+  const visible = (scoreboard?.visible ?? false) && clipShowScoreboard;
   const clockOrPeriod = clipMinuteMarker ?? scoreboard?.clockOrPeriod;
 
   const effectiveScorer = clipAllowsScorer ? scorer : null;
@@ -235,14 +248,15 @@ export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
       })}
 
       {/* Global music track: Sequence controls reel start/end; MusicTrack handles source trim + fade */}
-      {props.music?.src ? (
+      {props.music?.src && musicDurationFrames > 0 ? (
         <Sequence from={musicStartFrame} durationInFrames={musicDurationFrames} name="Music">
           <MusicTrack music={props.music} fps={fps} durationFrames={musicDurationFrames} />
         </Sequence>
       ) : null}
 
       {/* Overlay layers: scoreboard and lower-thirds; set visible: true and pass data to show. */}
-      <Sequence from={0} durationInFrames={Infinity} name="Scoreboard" layout="none">
+      {/* Start after the intro so the scoreboard doesn't overlay the intro card. */}
+      <Sequence from={introDurationFrames} durationInFrames={Infinity} name="Scoreboard" layout="none">
         <CumulativeScoreboard
           fps={fps}
           clipStartFrames={clipStartFrames}
