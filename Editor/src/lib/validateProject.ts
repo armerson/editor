@@ -1,4 +1,4 @@
-import type { ProjectData } from "../App"
+import type { ProjectData } from "../types"
 
 /**
  * Validate a project before export.
