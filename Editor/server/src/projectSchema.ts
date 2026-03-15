@@ -3,6 +3,7 @@ import { z } from "zod"
 export const ProjectSchema = z.object({
   version: z.number(),
   projectTitle: z.string(),
+  presetId: z.enum(["landscape", "square", "vertical"]).optional(),
   clips: z
     .array(
       z.object({
