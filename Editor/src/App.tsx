@@ -1074,7 +1074,7 @@ export default function App() {
                     ⚽ GOAL
                   </button>
                 )}
-                {selectedClip?.url && isNormalClip && selectedClip.showScoreboard && (
+                {selectedClip?.url && isNormalClip && selectedClip.showScoreboard && !(isPlayingReel && showIntroCard) && (
                   <ScoreboardOverlay scoreboard={scoreboard} minuteMarker={selectedClip.minuteMarker ?? ""} goals={goals} clips={clips} clipId={selectedClip.id} currentTimeInClip={videoCurrentTime} showScorerAfterGoal={selectedClip.showScorerAfterGoal} />
                 )}
               </div>
