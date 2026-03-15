@@ -117,6 +117,9 @@ export default function App() {
   musicEndInReelRef.current = musicEndInReel
   const fadeOutDurationRef = useRef(fadeOutDuration)
   fadeOutDurationRef.current = fadeOutDuration
+  // Always-fresh total reel duration so the RAF loop can use it as the
+  // effective music end when musicEndInReel is left blank.
+  const totalReelDurationRef = useRef(0)
   // Stable ref to the latest handleGoalClick — used by keyboard shortcut effect
   // so it never needs to be torn down and re-registered.
   const handleGoalClickRef = useRef<(() => void) | null>(null)
@@ -141,6 +144,8 @@ export default function App() {
   const effectiveIntroDuration = introEnabled ? intro.durationSeconds : 0
   const totalReelDuration =
     effectiveIntroDuration + clips.reduce((s, c) => s + Math.max(0, c.trimEnd - c.trimStart), 0)
+  // Keep ref in sync so the RAF loop always has the latest value.
+  totalReelDurationRef.current = totalReelDuration
 
   // ── Serialisation ──────────────────────────────────────────────────────────
 
@@ -660,9 +665,14 @@ export default function App() {
       // ── Music fade ─────────────────────────────────────────────────────────
       // Only act after music has started; read latest values via refs so the
       // effect doesn't need musicEndInReel / fadeOutDuration in its dep list.
+      //
+      // effectiveMusicEnd: if the user set an explicit end time, use it;
+      // otherwise fall back to the total reel duration so music always fades
+      // out at the end of the reel even when the audio file is longer.
       if (audio && musicStartedThisReelRef.current) {
-        const endSec = musicEndInReelRef.current === "" ? null : Number(musicEndInReelRef.current)
-        if (endSec != null && endSec > 0) {
+        const rawEnd = musicEndInReelRef.current
+        const endSec = rawEnd !== "" ? Number(rawEnd) : totalReelDurationRef.current
+        if (endSec > 0) {
           const dur = Math.max(fadeOutDurationRef.current, 0.001)
           const fadeStart = endSec - dur
           if (elapsed >= endSec) {
