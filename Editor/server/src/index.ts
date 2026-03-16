@@ -40,11 +40,11 @@ const rendersDir = process.env.RENDERS_DIR
 const BETA_TOKEN = process.env.BETA_TOKEN || null
 
 // ── Recover interrupted jobs from a previous run ──────────────────────────────
-// try {
-//   recoverInterruptedJobs()
-// } catch (err) {
-//   logger.error({ err }, "Failed to recover interrupted jobs, continuing anyway")
-// }
+try {
+  recoverInterruptedJobs()
+} catch (err) {
+  logger.error({ err }, "Failed to recover interrupted jobs, continuing anyway")
+}
 
 // ── Express app ───────────────────────────────────────────────────────────────
 const app = express()
@@ -73,12 +73,19 @@ app.use((req, _res, next) => {
 const SERVER_START = Date.now()
 
 function healthBody(): HealthResponse {
+  let activeJobs: number
+  try {
+    activeJobs = getActiveJobCount()
+  } catch (err) {
+    logger.error({ err }, "Failed to get active job count")
+    activeJobs = -1
+  }
   return {
     ok: true,
     version: process.env.npm_package_version ?? "0.1.0",
     uptime: Math.floor((Date.now() - SERVER_START) / 1000),
     db: "sqlite",
-    activeJobs: 0, // Temporarily disabled to debug startup
+    activeJobs,
   }
 }
 
