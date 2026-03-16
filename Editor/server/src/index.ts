@@ -162,7 +162,7 @@ app.post("/api/render", async (req, res) => {
       } else if (process.env.RENDER_OUTPUT_BUCKET) {
         // Local path + Firebase upload.
         logger.info({ jobId: job.jobId }, "uploading mp4 to storage")
-        const upload = await uploadRenderedMp4(result.localMp4Path, job.jobId)
+        const upload = await uploadRenderedMp4(result.localMp4Path!, job.jobId)
         updateJob(job.jobId, { status: "done", progress: 100, downloadUrl: upload.publicUrl })
         logger.info({ jobId: job.jobId, url: upload.publicUrl }, "upload complete")
       } else {
