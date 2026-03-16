@@ -1,4 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react"
+
+/**
+ * If `url` is a proxy-wrapped URL (e.g. http://localhost:3000/proxy?src=<encoded>),
+ * extract and return the direct underlying URL. Otherwise return `url` unchanged.
+ * This ensures render payloads always contain direct Firebase/S3 URLs that the
+ * compositor can fetch, regardless of what proxy the browser used for preview.
+ */
+function unwrapProxyUrl(url: string): string {
+  if (!url) return url
+  try {
+    const u = new URL(url)
+    if (u.pathname === "/proxy") {
+      const src = u.searchParams.get("src")
+      if (src) return decodeURIComponent(src)
+    }
+  } catch {
+    // Not a valid URL — return as-is
+  }
+  return url
+}
 import type { ChangeEvent } from "react"
 import { isFirebaseConfigured, uploadMediaToStorage } from "./firebase"
 import { validateProjectForExport } from "./lib/validateProject"
@@ -165,7 +185,7 @@ export default function App() {
         showScorerAfterGoal: c.showScorerAfterGoal,
         role: c.role ?? "normal",
         muteAudio: c.muteAudio ?? false,
-        ...(c.url.startsWith("http") ? { src: c.url } : {}),
+        ...(c.url.startsWith("http") ? { src: unwrapProxyUrl(c.url) } : {}),
         ...(c.thumbnail.startsWith("http") ? { thumbnail: c.thumbnail } : {}),
       })),
       intro: {
