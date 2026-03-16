@@ -56,6 +56,7 @@ export default function App() {
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null)
   const [isPlayingReel, setIsPlayingReel] = useState(false)
   const [showIntroCard, setShowIntroCard] = useState(false)
+  const [introEnabled, setIntroEnabled] = useState(true)
   const [intro, setIntro] = useState<IntroData>(() => ({ ...DEFAULT_INTRO }))
   const [scoreboard, setScoreboard] = useState<ScoreboardData>(() => ({
     homeTeamName: DEFAULT_INTRO.teamName,
@@ -72,12 +73,14 @@ export default function App() {
   const [clipAudioOn, setClipAudioOn] = useState(true)
   const [goals, setGoals] = useState<GoalEvent[]>([])
   const [pendingGoal, setPendingGoal] = useState<{ clipId: string; timeInClip: number } | null>(null)
+  const [autoTrimOnGoal, setAutoTrimOnGoal] = useState(true)
   const [videoCurrentTime, setVideoCurrentTime] = useState(0)
   const [goalScorerSide, setGoalScorerSide] = useState<"home" | "away">("home")
   const [goalScorerName, setGoalScorerName] = useState("")
   const [currentReelTime, setCurrentReelTime] = useState(0)
   const [projectTitle, setProjectTitle] = useState("Untitled Project")
   const [saveLoadStatus, setSaveLoadStatus] = useState<string | null>(null)
+  const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "pending" | null>(null)
   const [aspectRatio, setAspectRatio] = useState<AspectRatioPreset>("landscape")
   const [renderState, setRenderState] = useState<RenderState>({
     status: "idle",
@@ -91,16 +94,35 @@ export default function App() {
   const homeBadgeInputRef = useRef<HTMLInputElement | null>(null)
   const awayBadgeInputRef = useRef<HTMLInputElement | null>(null)
   const musicInputRef = useRef<HTMLInputElement | null>(null)
+  // videoRef always points to whichever video is currently active/visible
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const primaryRef = useRef<HTMLVideoElement | null>(null)
+  const bufferRef = useRef<HTMLVideoElement | null>(null)
+  const activePrimaryRef = useRef(true)
+  const [activePrimary, setActivePrimary] = useState(true)
+  // Mirrors showIntroCard state for use inside RAF closure
+  const showIntroCardRef = useRef(false)
+  showIntroCardRef.current = showIntroCard
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const reelStartTimeRef = useRef<number>(0)
   const musicStartedThisReelRef = useRef(false)
-  const fadeOutStartedRef = useRef(false)
   const rafIdRef = useRef<number>(0)
   const isPlayingReelRef = useRef(false)
   const musicVolumeRef = useRef(musicVolume)
   musicVolumeRef.current = musicVolume
   isPlayingReelRef.current = isPlayingReel
+  // Refs that mirror their state counterparts so the RAF tick can always read
+  // the latest values without being in the effect's dependency list.
+  const musicEndInReelRef = useRef<number | "">(musicEndInReel)
+  musicEndInReelRef.current = musicEndInReel
+  const fadeOutDurationRef = useRef(fadeOutDuration)
+  fadeOutDurationRef.current = fadeOutDuration
+  // Always-fresh total reel duration so the RAF loop can use it as the
+  // effective music end when musicEndInReel is left blank.
+  const totalReelDurationRef = useRef(0)
+  // Stable ref to the latest handleGoalClick — used by keyboard shortcut effect
+  // so it never needs to be torn down and re-registered.
+  const handleGoalClickRef = useRef<(() => void) | null>(null)
 
   // Real-time validation drives the Render button disabled state
   const validationErrors = useMemo(
@@ -119,8 +141,11 @@ export default function App() {
   const selectedClip = clips.find((c) => c.id === selectedClipId) ?? clips[0] ?? null
   /** True when the selected clip is a "normal" gameplay clip (not intro/outro). */
   const isNormalClip = !selectedClip?.role || selectedClip.role === "normal"
+  const effectiveIntroDuration = introEnabled ? intro.durationSeconds : 0
   const totalReelDuration =
-    intro.durationSeconds + clips.reduce((s, c) => s + Math.max(0, c.trimEnd - c.trimStart), 0)
+    effectiveIntroDuration + clips.reduce((s, c) => s + Math.max(0, c.trimEnd - c.trimStart), 0)
+  // Keep ref in sync so the RAF loop always has the latest value.
+  totalReelDurationRef.current = totalReelDuration
 
   // ── Serialisation ──────────────────────────────────────────────────────────
 
@@ -139,6 +164,7 @@ export default function App() {
         minuteMarker: c.minuteMarker,
         showScorerAfterGoal: c.showScorerAfterGoal,
         role: c.role ?? "normal",
+        muteAudio: c.muteAudio ?? false,
         ...(c.url.startsWith("http") ? { src: c.url } : {}),
         ...(c.thumbnail.startsWith("http") ? { thumbnail: c.thumbnail } : {}),
       })),
@@ -146,6 +172,8 @@ export default function App() {
         ...intro,
         homeBadgeUrl: intro.homeBadgeUrl.startsWith("http") ? intro.homeBadgeUrl : "",
         awayBadgeUrl: intro.awayBadgeUrl.startsWith("http") ? intro.awayBadgeUrl : "",
+        // durationSeconds: 0 signals the renderer to skip the intro entirely.
+        durationSeconds: introEnabled ? intro.durationSeconds : 0,
       },
       scoreboard: { ...scoreboard },
       goals: [...goals],
@@ -167,12 +195,15 @@ export default function App() {
   function applyProjectToState(project: ProjectData) {
     setProjectTitle(project.projectTitle)
     setAspectRatio((project.presetId as AspectRatioPreset | undefined) ?? "landscape")
+    // durationSeconds === 0 means intro was disabled when the project was saved.
+    setIntroEnabled((project.intro.durationSeconds ?? 1) > 0)
     setClips(
       project.clips.map((c) => ({
         ...c,
         url: c.src ?? "",
         thumbnail: c.thumbnail ?? "",
         role: (c.role ?? "normal") as ClipRole,
+        muteAudio: c.muteAudio ?? false,
       }))
     )
     // Backward compat: old projects use clubBadgeUrl; map it to homeBadgeUrl.
@@ -332,7 +363,7 @@ export default function App() {
         id, name: file.name, url: URL.createObjectURL(file), thumbnail,
         duration: safeDuration, trimStart: 0, trimEnd: safeDuration,
         showScoreboard: true, minuteMarker: "", showScorerAfterGoal: true,
-        role: "normal" as ClipRole,
+        role: "normal" as ClipRole, muteAudio: false,
       })
     }
     setClips((prev) => {
@@ -386,6 +417,9 @@ export default function App() {
   const setClipRole = (clipId: string, role: ClipRole) =>
     setClips((prev) => prev.map((c) => c.id === clipId ? { ...c, role } : c))
 
+  const setClipMuteAudio = (clipId: string, mute: boolean) =>
+    setClips((prev) => prev.map((c) => c.id === clipId ? { ...c, muteAudio: mute } : c))
+
   // ── Goals ──────────────────────────────────────────────────────────────────
 
   const handleGoalClick = () => {
@@ -393,11 +427,40 @@ export default function App() {
     setPendingGoal({ clipId: selectedClip.id, timeInClip: videoRef.current.currentTime })
     setGoalScorerSide("home"); setGoalScorerName("")
   }
+  // Keep ref in sync so the keyboard handler always calls the latest version
+  handleGoalClickRef.current = handleGoalClick
+
+  /** Open the goal dialog for whichever clip lives at `reelTimeSec`. */
+  const handleAddGoalAtReelTime = (reelTimeSec: number) => {
+    if (reelTimeSec < effectiveIntroDuration) return // inside intro card
+    let t = effectiveIntroDuration
+    for (const clip of clips) {
+      const clipDur = Math.max(0, clip.trimEnd - clip.trimStart)
+      if (reelTimeSec >= t && reelTimeSec < t + clipDur) {
+        const isNormal = !clip.role || clip.role === "normal"
+        if (!isNormal) return // no goals on intro/outro clips
+        const timeInClip = clip.trimStart + (reelTimeSec - t)
+        setPendingGoal({ clipId: clip.id, timeInClip })
+        setGoalScorerSide("home"); setGoalScorerName("")
+        return
+      }
+      t += clipDur
+    }
+  }
 
   const handleGoalSubmit = () => {
     if (!pendingGoal) return
     setGoals((prev) => [...prev, { id: crypto.randomUUID(), clipId: pendingGoal.clipId,
       timeInClip: pendingGoal.timeInClip, side: goalScorerSide, scorerName: goalScorerName.trim() || "Unknown" }])
+    // Optional auto-trim: centre the clip on [goalTime-4s, goalTime+2s]
+    if (autoTrimOnGoal) {
+      const clip = clips.find((c) => c.id === pendingGoal.clipId)
+      if (clip) {
+        const newStart = Math.max(0, pendingGoal.timeInClip - 4)
+        const newEnd = Math.min(clip.duration, pendingGoal.timeInClip + 2)
+        if (newEnd > newStart) updateClipTrim(clip.id, newStart, newEnd)
+      }
+    }
     setPendingGoal(null); setGoalScorerName("")
   }
 
@@ -461,60 +524,211 @@ export default function App() {
 
   // ── Reel playback ──────────────────────────────────────────────────────────
 
-  const handlePlayReel = () => {
-    if (clips.length === 0) return
-    setShowIntroCard(true); setIsPlayingReel(true); setSelectedClipId(null); setCurrentReelTime(0)
-    reelStartTimeRef.current = performance.now()
-    musicStartedThisReelRef.current = false; fadeOutStartedRef.current = false
+  // ── Dual-video reel playback ────────────────────────────────────────────────
+
+  /** Swap to the pre-buffered video, then load the clip after next into the
+   *  new buffer so it's ready for the following transition. */
+  const doTransition = (nextIdx: number) => {
+    const next = clips[nextIdx]
+    if (!next) { setIsPlayingReel(false); return }
+
+    const bufVideo = activePrimaryRef.current ? bufferRef.current : primaryRef.current
+    if (bufVideo) {
+      // Only reset src+position when the buffer wasn't already preloaded to this
+      // clip — an unnecessary seek at transition time is the main source of the
+      // black-frame gap.
+      if (bufVideo.src !== next.url) {
+        bufVideo.src = next.url
+        bufVideo.currentTime = next.trimStart
+      }
+      bufVideo.muted = !clipAudioOn || (next.muteAudio ?? false)
+      void bufVideo.play().catch((e) => console.warn("[reel] buffer play failed", e))
+    }
+
+    // Swap which element is "active"
+    activePrimaryRef.current = !activePrimaryRef.current
+    videoRef.current = activePrimaryRef.current ? primaryRef.current : bufferRef.current
+    setActivePrimary(activePrimaryRef.current)
+    setSelectedClipId(next.id)
+
+    // Preload the clip after next into the newly-idle buffer.
+    // We play() it briefly (muted) to warm up the decoder so the first frame is
+    // ready before the next transition fires — then pause so we don't drift.
+    const afterNext = clips[nextIdx + 1]
+    const newBuf = activePrimaryRef.current ? bufferRef.current : primaryRef.current
+    if (afterNext && newBuf && newBuf.src !== afterNext.url) {
+      console.log("[reel] preloading clip", nextIdx + 1, afterNext.id.slice(0, 8))
+      newBuf.src = afterNext.url
+      newBuf.currentTime = afterNext.trimStart
+      newBuf.muted = true
+      // .load() tells the browser to start buffering from trimStart.
+      // Avoid play().then(pause) — the async callback can fire after the reel
+      // ends and stomp the primary video's currentTime/paused state.
+      newBuf.load()
+    }
+    console.log("[reel] transition → clip", nextIdx, next.id.slice(0, 8),
+      "active:", activePrimaryRef.current ? "primary" : "buffer")
   }
 
-  useEffect(() => { if (audioRef.current) audioRef.current.volume = musicVolume }, [musicVolume, musicTrack])
+  /** Called by onTimeUpdate on whichever video is currently active. */
+  const handleVideoTimeUpdate = () => {
+    const v = videoRef.current
+    if (!v || !selectedClip) return
+    const vt = v.currentTime
+    setVideoCurrentTime(vt)
 
+    if (isPlayingReel) {
+      // Derive reel time directly from the video position — eliminates timer drift
+      const clipIdx = clips.findIndex((c) => c.id === selectedClip.id)
+      if (clipIdx !== -1) {
+        const offsetBefore =
+          effectiveIntroDuration +
+          clips.slice(0, clipIdx).reduce((s, c) => s + Math.max(0, c.trimEnd - c.trimStart), 0)
+        const reelT = offsetBefore + Math.max(0, vt - selectedClip.trimStart)
+        setCurrentReelTime(reelT)
+        console.debug("[reel]", selectedClip.id.slice(0, 8), "vt:", vt.toFixed(2), "→ reelT:", reelT.toFixed(2))
+      }
+      // Transition at trimEnd
+      if (vt >= selectedClip.trimEnd) {
+        v.pause()
+        const idx = clips.findIndex((c) => c.id === selectedClip.id)
+        console.log("[reel] trimEnd at", vt.toFixed(2), "clip idx", idx)
+        doTransition(idx + 1)
+      }
+    }
+  }
+
+  const handleVideoEnded = () => {
+    if (!isPlayingReel || !selectedClip) return
+    const idx = clips.findIndex((c) => c.id === selectedClip.id)
+    console.log("[reel] video ended, clip idx", idx)
+    doTransition(idx + 1)
+  }
+
+  const handlePlayReel = () => {
+    if (clips.length === 0) return
+
+    // Always start from primary
+    activePrimaryRef.current = true
+    videoRef.current = primaryRef.current
+    setActivePrimary(true)
+
+    // Preload clip 0 into primary, clip 1 into buffer
+    if (primaryRef.current && clips[0]) {
+      primaryRef.current.src = clips[0].url
+      primaryRef.current.currentTime = clips[0].trimStart
+    }
+    if (bufferRef.current && clips[1]) {
+      console.log("[reel] preloading clip 1 into buffer on start")
+      bufferRef.current.src = clips[1].url
+      bufferRef.current.currentTime = clips[1].trimStart
+      bufferRef.current.load()
+    }
+
+    // Skip intro card in preview when intro is disabled.
+    setShowIntroCard(introEnabled); setIsPlayingReel(true)
+    setSelectedClipId(introEnabled ? null : (clips[0]?.id ?? null)); setCurrentReelTime(0)
+    reelStartTimeRef.current = performance.now()
+    musicStartedThisReelRef.current = false
+  }
+
+  // During non-reel mode, keep audio.volume in sync with the slider.
+  // During reel playback this is handled by the continuous fade effect below.
+  useEffect(() => {
+    if (isPlayingReel) return
+    if (audioRef.current) audioRef.current.volume = musicVolume
+  }, [musicVolume, musicTrack, isPlayingReel])
+
+  // RAF loop: wall-clock intro timing + music start + music fade.
+  // All three run at ~60 fps inside a single loop so fade never misses a tick.
+  // Fade uses wall-clock elapsed (not currentReelTime) so it stays locked to
+  // where the music actually is, independent of React render batching.
   useEffect(() => {
     if (!isPlayingReel) { audioRef.current?.pause(); return }
     const tick = () => {
       if (!isPlayingReelRef.current) return
       const elapsed = (performance.now() - reelStartTimeRef.current) / 1000
-      setCurrentReelTime(elapsed)
+
+      // Wall-clock drives reelTime only during the intro card.
+      if (showIntroCardRef.current) setCurrentReelTime(elapsed)
+
       const audio = audioRef.current
+
+      // ── Music start ────────────────────────────────────────────────────────
       if (audio && musicTrack && !musicStartedThisReelRef.current && elapsed >= musicStartInReel) {
         musicStartedThisReelRef.current = true
         audio.currentTime = Math.max(0, musicStartInTrack)
         audio.volume = musicVolumeRef.current
         void audio.play().catch(() => {})
       }
-      const endSec = musicEndInReel === "" ? null : Number(musicEndInReel)
-      if (endSec != null && elapsed >= endSec && audio && !fadeOutStartedRef.current) {
-        fadeOutStartedRef.current = true
-        const fadeStart = performance.now(); const startVol = musicVolumeRef.current
-        const doFade = () => {
-          const el = audioRef.current; if (!el || !isPlayingReelRef.current) return
-          const fe = (performance.now() - fadeStart) / 1000
-          if (fe >= fadeOutDuration) { el.pause(); return }
-          el.volume = Math.max(0, startVol * (1 - fe / fadeOutDuration))
-          rafIdRef.current = requestAnimationFrame(doFade)
+
+      // ── Music fade ─────────────────────────────────────────────────────────
+      // Only act after music has started; read latest values via refs so the
+      // effect doesn't need musicEndInReel / fadeOutDuration in its dep list.
+      //
+      // effectiveMusicEnd: if the user set an explicit end time, use it;
+      // otherwise fall back to the total reel duration so music always fades
+      // out at the end of the reel even when the audio file is longer.
+      if (audio && musicStartedThisReelRef.current) {
+        const rawEnd = musicEndInReelRef.current
+        const endSec = rawEnd !== "" ? Number(rawEnd) : totalReelDurationRef.current
+        if (endSec > 0) {
+          const dur = Math.max(fadeOutDurationRef.current, 0.001)
+          const fadeStart = endSec - dur
+          if (elapsed >= endSec) {
+            // Past end — silence and stop (idempotent)
+            if (!audio.paused) { audio.volume = 0; audio.pause() }
+          } else if (elapsed >= fadeStart) {
+            // Inside fade zone — linear interpolation at 60 fps
+            audio.volume = Math.max(0, musicVolumeRef.current * (1 - (elapsed - fadeStart) / dur))
+          } else {
+            // Before fade zone — keep slider changes live
+            audio.volume = musicVolumeRef.current
+          }
         }
-        rafIdRef.current = requestAnimationFrame(doFade)
       }
+
       rafIdRef.current = requestAnimationFrame(tick)
     }
     rafIdRef.current = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(rafIdRef.current)
-  }, [isPlayingReel, musicTrack, musicStartInReel, musicStartInTrack, musicEndInReel, fadeOutDuration])
+    return () => { cancelAnimationFrame(rafIdRef.current) }
+  }, [isPlayingReel, musicTrack, musicStartInReel, musicStartInTrack])
 
   useEffect(() => {
     if (!isPlayingReel || !showIntroCard || clips.length === 0) return
-    const t = setTimeout(() => { setShowIntroCard(false); setSelectedClipId(clips[0].id) }, intro.durationSeconds * 1000)
+    const t = setTimeout(() => { setShowIntroCard(false); setSelectedClipId(clips[0].id) }, effectiveIntroDuration * 1000)
     return () => clearTimeout(t)
-  }, [isPlayingReel, showIntroCard, clips, intro.durationSeconds])
+  }, [isPlayingReel, showIntroCard, clips, effectiveIntroDuration])
 
+  // When the intro card ends (showIntroCard → false), the primary video was
+  // already loaded in handlePlayReel; just press play.
   useEffect(() => {
-    if (!isPlayingReel || !selectedClip || !videoRef.current || showIntroCard) return
-    const v = videoRef.current; v.currentTime = selectedClip.trimStart
-    void v.play().catch(() => {})
-  }, [isPlayingReel, selectedClip, showIntroCard])
+    if (!isPlayingReel || showIntroCard) return
+    const v = videoRef.current
+    if (!v) return
+    if (v.paused) {
+      if (v.src !== (selectedClip?.url ?? "")) v.src = selectedClip?.url ?? ""
+      v.currentTime = selectedClip?.trimStart ?? 0
+      void v.play().catch(() => {})
+      console.log("[reel] starting clip after intro:", selectedClip?.id?.slice(0, 8))
+    }
+  }, [isPlayingReel, showIntroCard])
 
-  useEffect(() => { if (!selectedClip || !videoRef.current) return; videoRef.current.currentTime = selectedClip.trimStart }, [selectedClip?.id])
+  // Manual clip selection (not during reel): always reset to primary and load the clip.
+  useEffect(() => {
+    if (isPlayingReel) return
+    // Ensure primary is the active element after reel ends or for manual selection
+    if (!activePrimaryRef.current) {
+      activePrimaryRef.current = true
+      videoRef.current = primaryRef.current
+      setActivePrimary(true)
+    }
+    const v = primaryRef.current
+    if (!v || !selectedClip) return
+    if (v.src !== selectedClip.url) v.src = selectedClip.url
+    v.currentTime = selectedClip.trimStart
+  }, [isPlayingReel, selectedClip?.id])
+
   useEffect(() => { if (!selectedClip || !videoRef.current || isPlayingReel) return; videoRef.current.currentTime = selectedClip.trimStart }, [selectedClip?.trimStart, selectedClip?.trimEnd, isPlayingReel])
   useEffect(() => { if (!selectedClip) setVideoCurrentTime(0); else if (videoRef.current) setVideoCurrentTime(videoRef.current.currentTime) }, [selectedClip?.id])
 
@@ -522,12 +736,59 @@ export default function App() {
     if (isPlayingReel) return
     if (!selectedClip || clips.length === 0) { setCurrentReelTime(0); return }
     const beforeSelected = clips.findIndex((c) => c.id === selectedClip.id)
-    const timeBeforeSelected = intro.durationSeconds + clips.slice(0, beforeSelected).reduce((s, c) => s + Math.max(0, c.trimEnd - c.trimStart), 0)
+    const timeBeforeSelected = effectiveIntroDuration + clips.slice(0, beforeSelected).reduce((s, c) => s + Math.max(0, c.trimEnd - c.trimStart), 0)
     const timeInClip = Math.max(0, Math.min(videoCurrentTime - selectedClip.trimStart, selectedClip.trimEnd - selectedClip.trimStart))
     setCurrentReelTime(timeBeforeSelected + timeInClip)
-  }, [isPlayingReel, selectedClip?.id, videoCurrentTime, clips, intro.durationSeconds])
+  }, [isPlayingReel, selectedClip?.id, videoCurrentTime, clips, effectiveIntroDuration])
 
-  useEffect(() => { if (!videoRef.current) return; videoRef.current.volume = clipAudioOn ? 1 : 0 }, [clipAudioOn, selectedClip?.id])
+  useEffect(() => {
+    if (!videoRef.current) return
+    videoRef.current.volume = (clipAudioOn && !(selectedClip?.muteAudio ?? false)) ? 1 : 0
+  }, [clipAudioOn, selectedClip?.id, selectedClip?.muteAudio])
+
+  // ── Badge preload ───────────────────────────────────────────────────────────
+  // Kick the browser's image cache as soon as badge URLs are known so the
+  // images are ready before the intro card appears (no "pop-in" delay).
+  useEffect(() => {
+    if (intro.homeBadgeUrl) { const img = new Image(); img.src = intro.homeBadgeUrl }
+    if (intro.awayBadgeUrl) { const img = new Image(); img.src = intro.awayBadgeUrl }
+  }, [intro.homeBadgeUrl, intro.awayBadgeUrl])
+
+  // ── Auto-save (draft) ───────────────────────────────────────────────────────
+  // Debounced: writes to DRAFT_STORAGE_KEY 3 s after the last change so the
+  // user never loses work without hitting Save manually.
+  useEffect(() => {
+    setAutoSaveStatus("pending")
+    const tid = setTimeout(() => {
+      try {
+        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(buildProjectSnapshot()))
+        setAutoSaveStatus("saved")
+      } catch {
+        // QuotaExceededError or private-browsing restriction — silently ignore
+        setAutoSaveStatus(null)
+      }
+    }, 3000)
+    return () => clearTimeout(tid)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clips, intro, scoreboard, goals, musicTrack, musicVolume, musicStartInReel,
+      musicStartInTrack, musicEndInReel, fadeOutDuration, clipAudioOn, projectTitle,
+      aspectRatio, introEnabled])
+
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────────
+
+  // G / g — add goal at current playhead position (mirrors the ⚽ GOAL button)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== "g" && e.key !== "G") return
+      // Don't fire when user is typing in a form field
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement).isContentEditable) return
+      if (pendingGoal) return // dialog already open
+      handleGoalClickRef.current?.()
+    }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [pendingGoal]) // re-register only when dialog open/closes
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -556,6 +817,20 @@ export default function App() {
                 className="w-full rounded-lg border border-neutral-600 bg-neutral-800 px-3 py-2 text-sm text-white placeholder-neutral-500"
                 onKeyDown={(e) => { if (e.key === "Enter") handleGoalSubmit(); if (e.key === "Escape") handleGoalCancel() }} />
             </div>
+            <label className="mb-4 flex cursor-pointer items-start gap-2">
+              <input type="checkbox" checked={autoTrimOnGoal}
+                onChange={(e) => setAutoTrimOnGoal(e.target.checked)}
+                className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded accent-yellow-500" />
+              <span className="text-xs text-neutral-400">
+                Auto-trim clip to{" "}
+                <span className="tabular-nums text-neutral-300">
+                  {Math.max(0, (pendingGoal?.timeInClip ?? 0) - 4).toFixed(1)}s
+                  {" – "}
+                  {((pendingGoal?.timeInClip ?? 0) + 2).toFixed(1)}s
+                </span>
+                {" "}around goal
+              </span>
+            </label>
             <div className="flex gap-2">
               <button type="button" onClick={handleGoalCancel} className="rounded-lg border border-neutral-600 bg-neutral-800 px-4 py-2 text-sm hover:bg-neutral-700">Cancel</button>
               <button type="button" onClick={handleGoalSubmit} className="flex-1 rounded-lg bg-yellow-500 px-4 py-2 text-sm font-semibold text-black hover:bg-yellow-400">Record goal</button>
@@ -580,6 +855,12 @@ export default function App() {
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             {saveLoadStatus && <span className="text-xs text-neutral-400">{saveLoadStatus}</span>}
+            {!saveLoadStatus && autoSaveStatus === "saved" && (
+              <span className="text-xs text-neutral-600">● draft saved</span>
+            )}
+            {!saveLoadStatus && autoSaveStatus === "pending" && (
+              <span className="text-xs text-neutral-700">saving…</span>
+            )}
             <button type="button" onClick={handleSaveProject} className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm hover:bg-neutral-800">Save</button>
             <button type="button" onClick={handleSaveDraft} className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm hover:bg-neutral-800">Draft</button>
             <button type="button" onClick={handleLoadProject} className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm hover:bg-neutral-800">Load</button>
@@ -649,8 +930,17 @@ export default function App() {
 
           {/* Match & Intro */}
           <div className="mb-4 rounded-xl border border-neutral-800 bg-neutral-900 p-4">
-            <h2 className="mb-3 text-sm font-semibold text-neutral-200">Match & Intro</h2>
-            <div className="space-y-2.5">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-neutral-200">Match & Intro</h2>
+              <label className="flex cursor-pointer items-center gap-2">
+                <span className="text-[10px] text-neutral-400">{introEnabled ? "Enabled" : "Disabled"}</span>
+                <button type="button" onClick={() => setIntroEnabled((v) => !v)}
+                  className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${introEnabled ? "bg-yellow-500" : "bg-neutral-600"}`}>
+                  <span className={`inline-block h-3 w-3 rounded-full bg-white shadow transition-transform ${introEnabled ? "translate-x-4" : "translate-x-0.5"}`} />
+                </button>
+              </label>
+            </div>
+            <div className={`space-y-2.5 ${introEnabled ? "" : "pointer-events-none opacity-40"}`}>
               {[
                 { label: "Team name", key: "teamName" as const, placeholder: "Ambassadors FC" },
                 { label: "Opponent", key: "opponent" as const, placeholder: "Rivals United" },
@@ -741,54 +1031,81 @@ export default function App() {
             {/* Video preview */}
             <div className="mx-auto w-full max-w-2xl">
               <div className={`relative w-full overflow-hidden rounded-xl border border-neutral-700 bg-black ${ASPECT_RATIO_CLASS[aspectRatio]}`}>
-                {isPlayingReel && showIntroCard ? (
+                {/* ── Dual-video: both elements always in DOM for preloading ── */}
+                {/* Primary */}
+                <video
+                  ref={(el) => { primaryRef.current = el; if (activePrimaryRef.current) videoRef.current = el }}
+                  preload="auto"
+                  playsInline
+                  controls={activePrimary && !!selectedClip?.url && !isPlayingReel}
+                  muted={!clipAudioOn || (selectedClip?.muteAudio ?? false)}
+                  className="absolute inset-0 h-full w-full object-contain"
+                  style={{ opacity: (activePrimary && !!selectedClip?.url && !(isPlayingReel && showIntroCard && introEnabled)) ? 1 : 0, pointerEvents: activePrimary ? "auto" : "none", transition: "opacity 0.08s linear" }}
+                  onTimeUpdate={() => { if (activePrimaryRef.current) handleVideoTimeUpdate() }}
+                  onEnded={() => { if (activePrimaryRef.current) handleVideoEnded() }}
+                />
+                {/* Buffer — hidden, preloading next clip */}
+                <video
+                  ref={(el) => { bufferRef.current = el; if (!activePrimaryRef.current) videoRef.current = el }}
+                  preload="auto"
+                  playsInline
+                  controls={!activePrimary && !!selectedClip?.url && !isPlayingReel}
+                  muted={!clipAudioOn || (selectedClip?.muteAudio ?? false)}
+                  className="absolute inset-0 h-full w-full object-contain"
+                  style={{ opacity: (!activePrimary && !!selectedClip?.url && !(isPlayingReel && showIntroCard && introEnabled)) ? 1 : 0, pointerEvents: activePrimary ? "none" : "auto", transition: "opacity 0.08s linear" }}
+                  onTimeUpdate={() => { if (!activePrimaryRef.current) handleVideoTimeUpdate() }}
+                  onEnded={() => { if (!activePrimaryRef.current) handleVideoEnded() }}
+                />
+
+                {/* Intro card overlay */}
+                {isPlayingReel && showIntroCard && introEnabled && (
                   <IntroCard intro={intro} className="absolute inset-0 h-full w-full" />
-                ) : selectedClip?.url ? (
-                  <>
-                    <video ref={videoRef} key={selectedClip.id} src={selectedClip.url}
-                      controls muted={!clipAudioOn}
-                      className="absolute inset-0 h-full w-full object-contain"
-                      onLoadedMetadata={() => { if (videoRef.current) videoRef.current.currentTime = selectedClip.trimStart }}
-                      onTimeUpdate={() => {
-                        if (videoRef.current) setVideoCurrentTime(videoRef.current.currentTime)
-                        if (!isPlayingReel || !videoRef.current) return
-                        if (videoRef.current.currentTime >= selectedClip.trimEnd) {
-                          videoRef.current.pause()
-                          const idx = clips.findIndex((c) => c.id === selectedClip.id)
-                          if (idx + 1 >= clips.length) { setIsPlayingReel(false); return }
-                          setSelectedClipId(clips[idx + 1].id)
-                        }
-                      }}
-                      onEnded={() => {
-                        if (!isPlayingReel) return
-                        const idx = clips.findIndex((c) => c.id === selectedClip.id)
-                        if (idx + 1 >= clips.length) { setIsPlayingReel(false); return }
-                        setSelectedClipId(clips[idx + 1].id)
-                      }} />
-                    {isNormalClip && (
-                      <button type="button" onClick={handleGoalClick}
-                        className="absolute right-3 top-3 z-10 rounded-lg bg-yellow-500 px-3 py-1.5 text-xs font-bold text-black shadow-lg hover:bg-yellow-400">
-                        ⚽ GOAL
-                      </button>
-                    )}
-                    {isNormalClip && selectedClip.showScoreboard && (
-                      <ScoreboardOverlay scoreboard={scoreboard} minuteMarker={selectedClip.minuteMarker ?? ""} goals={goals} clips={clips} clipId={selectedClip.id} currentTimeInClip={videoCurrentTime} showScorerAfterGoal={selectedClip.showScorerAfterGoal} />
-                    )}
-                  </>
-                ) : selectedClip ? (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center text-neutral-500">
-                    <p className="text-sm">Re-upload this clip to restore playback.</p>
-                    <p className="text-xs text-neutral-600">Load project restores settings only.</p>
-                  </div>
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center text-neutral-600">
-                      <svg className="mx-auto mb-3 h-12 w-12 text-neutral-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" /></svg>
-                      <p className="text-sm">Upload clips to get started</p>
+                )}
+
+                {/* Placeholders */}
+                {!selectedClip?.url && !isPlayingReel && (
+                  selectedClip ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center text-neutral-500">
+                      <p className="text-sm">Re-upload this clip to restore playback.</p>
+                      <p className="text-xs text-neutral-600">Load project restores settings only.</p>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="text-center text-neutral-600">
+                        <svg className="mx-auto mb-3 h-12 w-12 text-neutral-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" /></svg>
+                        <p className="text-sm">Upload clips to get started</p>
+                      </div>
+                    </div>
+                  )
+                )}
+
+                {/* Goal button — only when a clip is visible */}
+                {selectedClip?.url && isNormalClip && !(isPlayingReel && showIntroCard) && (
+                  <button type="button" onClick={handleGoalClick}
+                    className="absolute right-3 top-3 z-10 rounded-lg bg-yellow-500 px-3 py-1.5 text-xs font-bold text-black shadow-lg hover:bg-yellow-400">
+                    ⚽ GOAL
+                  </button>
+                )}
+                {selectedClip?.url && isNormalClip && selectedClip.showScoreboard && !(isPlayingReel && showIntroCard) && (
+                  <ScoreboardOverlay scoreboard={scoreboard} minuteMarker={selectedClip.minuteMarker ?? ""} goals={goals} clips={clips} clipId={selectedClip.id} currentTimeInClip={videoCurrentTime} showScorerAfterGoal={selectedClip.showScorerAfterGoal} />
                 )}
               </div>
+            </div>
+
+            {/* Timeline */}
+            <div className="mx-auto mt-3 w-full max-w-2xl">
+              <div className="mb-1.5 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-neutral-200">Timeline</h2>
+                <p className="text-xs text-neutral-500">
+                  {clips.length === 0
+                    ? "Upload clips to build your reel"
+                    : "Drag to reorder · handles to trim · click to add ⚽ · G key"}
+                </p>
+              </div>
+              <TimelineTrack clips={clips} goals={goals} selectedClipId={selectedClipId}
+                currentReelTime={currentReelTime} introDurationSeconds={effectiveIntroDuration}
+                onSelectClip={handleSelectClip} onReorder={handleReorderClips}
+                onTrimClip={updateClipTrim} onAddGoalAtReelTime={handleAddGoalAtReelTime} />
             </div>
 
             {/* Clip settings */}
@@ -828,26 +1145,20 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Trim */}
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    { label: "Trim Start (s)", min: 0, max: selectedClip.trimEnd, value: selectedClip.trimStart,
-                      onChange: (v: number) => updateClipTrim(selectedClip.id, v, Math.max(v, selectedClip.trimEnd)) },
-                    { label: "Trim End (s)", min: selectedClip.trimStart, max: selectedClip.duration, value: selectedClip.trimEnd,
-                      onChange: (v: number) => updateClipTrim(selectedClip.id, selectedClip.trimStart, v) },
-                  ].map(({ label, min, max, value, onChange }) => (
-                    <div key={label}>
-                      <label className="mb-1 block text-xs text-neutral-400">{label}</label>
-                      <div className="flex gap-2">
-                        <input type="range" min={min} max={max} step={0.1} value={value}
-                          onChange={(e) => onChange(parseFloat(e.target.value))} className="h-2 flex-1 accent-yellow-500" />
-                        <input type="number" min={min} max={max} step={0.1} value={value.toFixed(1)}
-                          onChange={(e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) onChange(Math.max(min, Math.min(v, max))) }}
-                          className="w-16 rounded border border-neutral-700 bg-neutral-800 px-2 py-1 text-xs text-white" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                {/* Mute audio */}
+                <label className="mb-3 flex cursor-pointer items-center justify-between gap-3">
+                  <span className="flex items-center gap-1.5 text-xs text-neutral-300">
+                    <svg className="h-3.5 w-3.5 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      {selectedClip.muteAudio
+                        ? <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                        : <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072M12 6v12m0-12L7.757 9.757A1 1 0 017 10.414H5a1 1 0 00-1 1v1.172a1 1 0 001 1H7a1 1 0 01.707.293L12 18m0-12v12" />}
+                    </svg>
+                    Mute clip audio
+                  </span>
+                  <input type="checkbox" checked={selectedClip.muteAudio ?? false}
+                    onChange={(e) => setClipMuteAudio(selectedClip.id, e.target.checked)}
+                    className="h-3.5 w-3.5 rounded accent-yellow-500" />
+                </label>
 
                 {/* Scoreboard — only for normal clips */}
                 {isNormalClip && (
@@ -913,19 +1224,6 @@ export default function App() {
               <RenderPanel renderState={renderState}
                 onReset={() => setRenderState({ status: "idle", jobId: null, progress: 0, downloadUrl: null, error: null })} />
             </div>
-          </div>
-
-          {/* Timeline */}
-          <div className="shrink-0 border-t border-neutral-800 bg-neutral-950 px-5 py-4">
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-neutral-200">Timeline</h2>
-              <p className="text-xs text-neutral-500">
-                {clips.length === 0 ? "Upload clips to build your reel" : "Drag clips to reorder · ⚽ marks goal positions"}
-              </p>
-            </div>
-            <TimelineTrack clips={clips} goals={goals} selectedClipId={selectedClipId}
-              currentReelTime={currentReelTime} introDurationSeconds={intro.durationSeconds}
-              onSelectClip={handleSelectClip} onReorder={handleReorderClips} />
           </div>
 
           {/* Music */}

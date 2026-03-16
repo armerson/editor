@@ -1,36 +1,102 @@
 import React from 'react';
-import { AbsoluteFill, OffthreadVideo } from 'remotion';
+import { AbsoluteFill, OffthreadVideo, useCurrentFrame, interpolate } from 'remotion';
 import type { ClipData } from '../types/reel';
+
+/** Number of frames for fade-in at clip start and fade-out at clip end. */
+const TRANSITION_FRAMES = 15; // 0.5 s at 30 fps
+
+/**
+ * Per-component delayRender timeout for OffthreadVideo frame extraction.
+ *
+ * This prop-level timeout overrides both the global remotion.config.ts setting
+ * AND the global window.remotion_puppeteerTimeout injected at render time, so
+ * it takes effect immediately without restarting the Studio or the render server.
+ *
+ * 90 s gives FFmpeg enough headroom to decode a frame from a remote storage URL
+ * (Firebase / S3) on first access, which requires downloading the video range
+ * before the specific frame can be extracted.
+ */
+const OFFTHREAD_VIDEO_TIMEOUT_MS = 90_000
 
 type ClipSegmentProps = ClipData & {
   /** FPS for frame-based trim */
   fps: number;
-  /** If true, play the clip's original audio track. Default false. */
+  /** Total duration of this clip in frames — used to time the fade-out. */
+  durationFrames: number;
+  /** If true, play the clip's original audio track (global setting). Default false. */
   clipAudioOn?: boolean;
 };
 
 /**
  * Renders a single clip with trimStart/trimEnd support.
- * trimStart/trimEnd are in seconds; we convert to frames for OffthreadVideo (trimBefore/trimAfter).
+ * Fades in over the first TRANSITION_FRAMES and out over the last TRANSITION_FRAMES
+ * so consecutive clips dissolve through black rather than hard-cutting.
  */
 export const ClipSegment: React.FC<ClipSegmentProps> = ({
   src,
   trimStart = 0,
   trimEnd,
   fps,
+  durationFrames,
   clipAudioOn = false,
+  muteAudio = false,
 }) => {
+  const frame = useCurrentFrame();
   const trimBeforeFrames = Math.round(trimStart * fps);
   const trimAfterFrames = trimEnd != null ? Math.round(trimEnd * fps) : undefined;
 
+  // Fade in at start, fade out at end.
+  const opacity = interpolate(
+    frame,
+    [0, TRANSITION_FRAMES, Math.max(TRANSITION_FRAMES, durationFrames - TRANSITION_FRAMES), durationFrames],
+    [0, 1, 1, 0],
+    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+  );
+
+  // ── Safe fallback for missing/empty src ───────────────────────────────────
+  // Passing an empty or undefined src to OffthreadVideo causes the compositor
+  // to stall waiting for a video that can never load, which eventually triggers
+  // a SIGKILL or a 90-second timeout that aborts the entire render.
+  // Render a silent black placeholder instead so the reel can still complete.
+  if (!src || !src.trim()) {
+    console.error(
+      `[ClipSegment] frame ${frame}: src is empty — rendering black placeholder. ` +
+      `Ensure every clip has a valid video URL before rendering.`
+    )
+    return (
+      <AbsoluteFill
+        style={{
+          backgroundColor: '#000',
+          opacity,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'system-ui, sans-serif',
+            fontSize: 24,
+            color: 'rgba(255,255,255,0.3)',
+          }}
+        >
+          Missing video
+        </span>
+      </AbsoluteFill>
+    );
+  }
+
+  // A clip is muted if the per-clip flag is set OR the global clipAudioOn is false.
+  const isMuted = !clipAudioOn || muteAudio;
+
   return (
-    <AbsoluteFill>
+    <AbsoluteFill style={{ opacity }}>
       <OffthreadVideo
         src={src}
         trimBefore={trimBeforeFrames}
         trimAfter={trimAfterFrames}
         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-        muted={!clipAudioOn}
+        muted={isMuted}
+        delayRenderTimeoutInMilliseconds={OFFTHREAD_VIDEO_TIMEOUT_MS}
       />
     </AbsoluteFill>
   );

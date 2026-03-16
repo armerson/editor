@@ -17,6 +17,8 @@ export const ProjectSchema = z.object({
         showScorerAfterGoal: z.boolean(),
         /** "normal" if absent — backward compat */
         role: z.enum(["normal", "intro", "outro"]).optional(),
+        /** When true the clip's original audio is silenced in the render. */
+        muteAudio: z.boolean().optional(),
         src: z.string().url().optional(),
         thumbnail: z.string().url().optional(),
       })

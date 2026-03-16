@@ -47,7 +47,16 @@ const app = express()
 
 // Allow the Vercel frontend origin (or * for local dev / unset).
 const corsOrigin = process.env.CORS_ORIGIN ?? "*"
-app.use(cors({ origin: corsOrigin }))
+const corsOptions: cors.CorsOptions = {
+  origin: corsOrigin,
+  // Explicitly allow the custom auth header so the browser preflight passes.
+  allowedHeaders: ["Content-Type", "X-Beta-Token"],
+  methods: ["GET", "POST", "OPTIONS"],
+}
+// Must handle OPTIONS before any auth middleware — cors() alone doesn't
+// guarantee a short-circuit when origin is a specific string.
+app.options("*", cors(corsOptions))
+app.use(cors(corsOptions))
 app.use(express.json({ limit: "25mb" }))
 
 // Request logging middleware
@@ -80,6 +89,8 @@ app.get("/healthz", (_req, res) => {
 // ── Beta token guard (protects all /api/* routes) ─────────────────────────────
 if (BETA_TOKEN) {
   app.use("/api", (req, res, next) => {
+    // Always let CORS preflight through — auth headers aren't sent on OPTIONS.
+    if (req.method === "OPTIONS") { next(); return }
     const token = req.headers["x-beta-token"]
     if (token !== BETA_TOKEN) {
       logger.warn({ url: req.url }, "rejected request: missing or invalid beta token")
@@ -111,6 +122,20 @@ app.post("/api/render", async (req, res) => {
     return
   }
 
+  // ── Concurrent render guard ──────────────────────────────────────────────
+  // Railway's 512 MB starter plan cannot sustain two simultaneous renders.
+  // Each render uses ~400-500 MB (Node.js + Chrome + FFmpeg compositor);
+  // a second parallel render would immediately OOM-kill the container.
+  // Reject with 429 if a render is already in progress — the client must
+  // poll the existing job and retry after it finishes.
+  const active = getActiveJobCount()
+  if (active >= 1) {
+    logger.warn({ activeJobs: active }, "render rejected: another render is already in progress")
+    const body: ErrorResponse = { error: "A render is already in progress. Please wait for it to finish, then try again." }
+    res.status(429).json(body)
+    return
+  }
+
   const job = createJob()
 
   // HTTP 202 Accepted — job is queued, poll GET /api/render/:jobId for status.
@@ -122,7 +147,7 @@ app.post("/api/render", async (req, res) => {
     try {
       updateJob(job.jobId, { status: "rendering", progress: 0 })
 
-      const { localMp4Path } = await renderProjectToMp4({
+      const result = await renderProjectToMp4({
         jobId: job.jobId,
         project,
         rendersDir,
@@ -130,12 +155,18 @@ app.post("/api/render", async (req, res) => {
           updateJob(job.jobId, { status: "rendering", progress: p01 * 100 }),
       })
 
-      if (process.env.RENDER_OUTPUT_BUCKET) {
+      if (result.downloadUrl) {
+        // Lambda path: rendered MP4 is already on S3 with a public URL — no upload needed.
+        updateJob(job.jobId, { status: "done", progress: 100, downloadUrl: result.downloadUrl })
+        logger.info({ jobId: job.jobId, downloadUrl: result.downloadUrl }, "Lambda render stored on S3")
+      } else if (process.env.RENDER_OUTPUT_BUCKET) {
+        // Local path + Firebase upload.
         logger.info({ jobId: job.jobId }, "uploading mp4 to storage")
-        const upload = await uploadRenderedMp4(localMp4Path, job.jobId)
+        const upload = await uploadRenderedMp4(result.localMp4Path, job.jobId)
         updateJob(job.jobId, { status: "done", progress: 100, downloadUrl: upload.publicUrl })
         logger.info({ jobId: job.jobId, url: upload.publicUrl }, "upload complete")
       } else {
+        // Local path + serve from this server.
         const base = (process.env.PUBLIC_BASE_URL ?? `http://localhost:${PORT}`).replace(/\/$/, "")
         const downloadUrl = `${base}/renders/${job.jobId}.mp4`
         updateJob(job.jobId, { status: "done", progress: 100, downloadUrl })

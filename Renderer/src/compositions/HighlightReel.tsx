@@ -6,6 +6,17 @@ import { ClipSegment } from '../components/ClipSegment';
 import { ScoreboardOverlay } from '../components/ScoreboardOverlay';
 import { LowerThirdsOverlay } from '../components/LowerThirdsOverlay';
 
+// ─── Renderer-side diagnostics ────────────────────────────────────────────────
+// These console calls run inside headless Chrome during the render; the server
+// captures them via onBrowserLog and writes them to the structured log with the
+// job ID so failures can be traced to specific clips or frames.
+function logOnce(frame: number, message: string): void {
+  if (frame === 0) console.log(`[HighlightReel] ${message}`)
+}
+function warnOnce(frame: number, message: string): void {
+  if (frame === 0) console.warn(`[HighlightReel] ${message}`)
+}
+
 export type HighlightReelProps = HighlightReelData & {
   /** Output preset id: 'landscape' | 'square' | 'vertical' */
   presetId?: string;
@@ -186,7 +197,9 @@ const MusicTrack: React.FC<{
 export function getHighlightReelDurationInFrames(props: HighlightReelProps): number {
   const fps = props.fps ?? FPS;
   let total = 0;
-  total += Math.ceil((props.intro?.durationSeconds ?? 3) * fps);
+  // durationSeconds === 0 means the intro was disabled by the editor.
+  const introDuration = props.intro?.durationSeconds ?? 3;
+  if (introDuration > 0) total += Math.ceil(introDuration * fps);
   const clips = (props.clips ?? []).filter((c) => c.src?.trim());
   for (const clip of clips) {
     total += Math.ceil(getClipDurationSeconds(clip) * fps);
@@ -195,8 +208,10 @@ export function getHighlightReelDurationInFrames(props: HighlightReelProps): num
 }
 
 export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
+  const frame = useCurrentFrame();
   const fps = props.fps ?? FPS;
-  const introDurationFrames = Math.ceil((props.intro?.durationSeconds ?? 3) * fps);
+  const introDuration = props.intro?.durationSeconds ?? 3;
+  const introDurationFrames = introDuration > 0 ? Math.ceil(introDuration * fps) : 0;
 
   const allClips = props.clips ?? [];
   const clips = allClips.filter((c) => c.src?.trim());
@@ -206,6 +221,29 @@ export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
     clipStartFrames.push(acc);
     acc += Math.ceil(getClipDurationSeconds(clips[i]) * fps);
   }
+
+  // ── Diagnostics (captured by server onBrowserLog) ─────────────────────────
+  logOnce(frame, `clips=${clips.length} intro=${introDurationFrames}f total=${acc}f fps=${fps}`)
+  for (let i = 0; i < clips.length; i++) {
+    const c = clips[i];
+    logOnce(frame, `clip[${i + 1}] "${c.name ?? '?'}" src=${c.src ? 'ok' : 'MISSING'} trim=${c.trimStart ?? 0}-${c.trimEnd ?? '?'} role=${c.role ?? 'normal'}`)
+  }
+  // Warn about dropped clips (had no src after filtering)
+  const droppedCount = allClips.length - clips.length;
+  if (droppedCount > 0) {
+    warnOnce(frame, `${droppedCount} clip(s) dropped due to missing src`)
+  }
+  // Determine which clip is rendering right now (for per-frame diagnostics)
+  React.useMemo(() => {
+    for (let i = 0; i < clips.length; i++) {
+      const start = clipStartFrames[i] ?? 0;
+      const dur = Math.ceil(getClipDurationSeconds(clips[i]) * fps);
+      if (frame >= start && frame < start + dur && frame === start) {
+        console.log(`[HighlightReel] → starting clip[${i + 1}] "${clips[i].name ?? '?'}" at frame ${frame}`)
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frame])
 
   // Music timeline: startInReel/endInReel are reel positions (not source positions).
   const totalReelFrames = getHighlightReelDurationInFrames(props);
@@ -219,10 +257,12 @@ export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
 
   return (
     <AbsoluteFill>
-      {/* Intro card */}
-      <Sequence from={0} durationInFrames={introDurationFrames} name="Intro">
-        <IntroCard {...props.intro} />
-      </Sequence>
+      {/* Intro card — skipped entirely when durationSeconds is 0 (disabled in editor) */}
+      {introDurationFrames > 0 && (
+        <Sequence from={0} durationInFrames={introDurationFrames} name="Intro">
+          <IntroCard {...props.intro} durationFrames={introDurationFrames} fps={fps} />
+        </Sequence>
+      )}
 
       {/* Ordered video clips with trim — use clip.src from project JSON */}
       {clips.map((clip, index) => {
@@ -241,7 +281,9 @@ export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
               trimStart={clip.trimStart ?? 0}
               trimEnd={clip.trimEnd}
               fps={fps}
+              durationFrames={durationFrames}
               clipAudioOn={props.music?.clipAudioOn ?? false}
+              muteAudio={clip.muteAudio ?? false}
             />
           </Sequence>
         );

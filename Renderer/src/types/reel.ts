@@ -44,6 +44,11 @@ export type ClipData = {
    * receive goal events. Defaults to 'normal' when absent.
    */
   role?: ClipRole;
+  /**
+   * When true the clip's original audio is silenced in the render,
+   * regardless of the global clipAudioOn setting.
+   */
+  muteAudio?: boolean;
   /** Whether the scoreboard should be visible while this clip plays (defaults to true if undefined). */
   showScoreboard?: boolean;
   /** Label for the current match time/period while this clip plays, e.g. "12'" or "2nd half 34'". */

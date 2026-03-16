@@ -16,7 +16,15 @@ export type RenderStatusResponse = {
   updatedAt?: string
 }
 
-const API_BASE = (import.meta.env.VITE_RENDER_API_BASE ?? "http://localhost:3001").replace(/\/$/, "")
+/** Normalise the backend URL — add https:// if no protocol is present, strip trailing slash. */
+function normaliseBase(raw: string): string {
+  const trimmed = raw.trim().replace(/\/$/, "")
+  if (trimmed && !/^https?:\/\//i.test(trimmed)) {
+    return `https://${trimmed}`
+  }
+  return trimmed
+}
+const API_BASE = normaliseBase(import.meta.env.VITE_RENDER_API_BASE ?? "http://localhost:3001")
 
 /** Return headers including the beta token when one is stored. */
 function apiHeaders(extra: Record<string, string> = {}): Record<string, string> {

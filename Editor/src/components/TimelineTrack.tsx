@@ -13,6 +13,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import { useMemo, useRef, useState } from "react"
 import type { Clip, ClipRole, GoalEvent } from "../types"
 
 function formatTime(seconds: number): string {
@@ -48,15 +49,87 @@ const ROLE_BADGE: Record<Exclude<ClipRole, "normal">, { label: string; cls: stri
   outro: { label: "OUT", cls: "bg-purple-500/80 text-white" },
 }
 
+// ── Snapping ──────────────────────────────────────────────────────────────────
+
+/** Seconds within which a dragged trim handle will snap to a target value. */
+const SNAP_THRESHOLD_S = 0.3
+
+function snapToTargets(value: number, targets: number[]): number {
+  for (const t of targets) {
+    if (Math.abs(value - t) <= SNAP_THRESHOLD_S) return t
+  }
+  return value
+}
+
+// ── Trim handle ───────────────────────────────────────────────────────────────
+
+type TrimHandleProps = {
+  side: "left" | "right"
+  clip: Clip
+  pxPerSec: number
+  /** Goal times (in clip seconds) used as extra snap targets. */
+  goalTimesInClip: number[]
+  onTrim: (clipId: string, trimStart: number, trimEnd: number) => void
+}
+
+function TrimHandle({ side, clip, pxPerSec, goalTimesInClip, onTrim }: TrimHandleProps) {
+  const dragRef = useRef<{ startX: number; startTrim: number } | null>(null)
+
+  return (
+    <div
+      className={`absolute top-0 bottom-0 z-20 flex w-2.5 items-center justify-center ${
+        side === "left" ? "left-0" : "right-0"
+      } cursor-ew-resize`}
+      onPointerDown={(e) => {
+        e.stopPropagation()
+        e.currentTarget.setPointerCapture(e.pointerId)
+        dragRef.current = {
+          startX: e.clientX,
+          startTrim: side === "left" ? clip.trimStart : clip.trimEnd,
+        }
+      }}
+      onPointerMove={(e) => {
+        if (!dragRef.current) return
+        const dSec = (e.clientX - dragRef.current.startX) / pxPerSec
+        if (side === "left") {
+          // Snap to 0 (clip start) and any goal times in this clip
+          const raw = dragRef.current.startTrim + dSec
+          const snapped = snapToTargets(raw, [0, ...goalTimesInClip])
+          const newStart = Math.max(0, Math.min(snapped, clip.trimEnd - 0.5))
+          onTrim(clip.id, newStart, clip.trimEnd)
+        } else {
+          // Snap to clip natural end and any goal times in this clip
+          const raw = dragRef.current.startTrim + dSec
+          const snapped = snapToTargets(raw, [clip.duration, ...goalTimesInClip])
+          const newEnd = Math.max(clip.trimStart + 0.5, Math.min(clip.duration, snapped))
+          onTrim(clip.id, clip.trimStart, newEnd)
+        }
+      }}
+      onPointerUp={(e) => {
+        dragRef.current = null
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="h-full w-0.5 rounded-full bg-yellow-400/80" />
+    </div>
+  )
+}
+
+// ── Single sortable clip cell ─────────────────────────────────────────────────
+
 type ClipCellProps = {
   clip: Clip
   isSelected: boolean
   hasGoals: boolean
   widthPx: number
+  pxPerSec: number
+  goalTimesInClip: number[]
   onSelect: (id: string) => void
+  onTrim: (clipId: string, trimStart: number, trimEnd: number) => void
 }
 
-function ClipCell({ clip, isSelected, hasGoals, widthPx, onSelect }: ClipCellProps) {
+function ClipCell({ clip, isSelected, hasGoals, widthPx, pxPerSec, goalTimesInClip, onSelect, onTrim }: ClipCellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: clip.id })
 
@@ -64,7 +137,7 @@ function ClipCell({ clip, isSelected, hasGoals, widthPx, onSelect }: ClipCellPro
     transform: CSS.Transform.toString(transform),
     transition,
     width: widthPx,
-    minWidth: Math.min(72, widthPx),
+    minWidth: Math.min(56, widthPx),
     opacity: isDragging ? 0.5 : 1,
   }
 
@@ -75,7 +148,7 @@ function ClipCell({ clip, isSelected, hasGoals, widthPx, onSelect }: ClipCellPro
       ref={setNodeRef}
       style={style}
       type="button"
-      onClick={() => onSelect(clip.id)}
+      onClick={(e) => { e.stopPropagation(); onSelect(clip.id) }}
       className={`group relative flex shrink-0 flex-col overflow-hidden rounded-lg border transition-colors ${
         isSelected
           ? "border-yellow-500 ring-1 ring-yellow-500/40"
@@ -94,7 +167,7 @@ function ClipCell({ clip, isSelected, hasGoals, widthPx, onSelect }: ClipCellPro
       )}
 
       {/* Thumbnail */}
-      <div className="relative h-12 w-full overflow-hidden bg-neutral-800">
+      <div className="relative h-8 w-full overflow-hidden bg-neutral-800">
         {clip.thumbnail ? (
           <img
             src={clip.thumbnail}
@@ -126,6 +199,10 @@ function ClipCell({ clip, isSelected, hasGoals, widthPx, onSelect }: ClipCellPro
           {formatTime(trimmedDuration)}
         </div>
       </div>
+
+      {/* Trim handles — only visible on hover/selection */}
+      <TrimHandle side="left" clip={clip} pxPerSec={pxPerSec} goalTimesInClip={goalTimesInClip} onTrim={onTrim} />
+      <TrimHandle side="right" clip={clip} pxPerSec={pxPerSec} goalTimesInClip={goalTimesInClip} onTrim={onTrim} />
     </button>
   )
 }
@@ -163,9 +240,15 @@ type Props = {
   introDurationSeconds: number
   onSelectClip: (id: string) => void
   onReorder: (from: number, to: number) => void
+  onTrimClip: (clipId: string, trimStart: number, trimEnd: number) => void
+  /** If provided, clicking the timeline background at a time position opens the
+   *  goal dialog at that reel position. */
+  onAddGoalAtReelTime?: (reelTimeSec: number) => void
 }
 
-const PIXELS_PER_SECOND = 60
+const MIN_PX_PER_SEC = 20
+const MAX_PX_PER_SEC = 120
+const DEFAULT_PX_PER_SEC = 36
 
 export function TimelineTrack({
   clips,
@@ -175,10 +258,25 @@ export function TimelineTrack({
   introDurationSeconds,
   onSelectClip,
   onReorder,
+  onTrimClip,
+  onAddGoalAtReelTime,
 }: Props) {
+  const [pxPerSec, setPxPerSec] = useState(DEFAULT_PX_PER_SEC)
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   )
+
+  // Map clipId → goal times (in clip seconds) for snapping and ClipCell badge
+  const goalTimesByClip = useMemo(() => {
+    const m = new Map<string, number[]>()
+    for (const g of goals) {
+      const existing = m.get(g.clipId) ?? []
+      existing.push(g.timeInClip)
+      m.set(g.clipId, existing)
+    }
+    return m
+  }, [goals])
 
   const introDuration = introDurationSeconds
   const clipsTrimmedDuration = clips.reduce(
@@ -186,7 +284,7 @@ export function TimelineTrack({
     0
   )
   const totalReelDuration = introDuration + clipsTrimmedDuration
-  const timelineWidthPx = Math.max(totalReelDuration * PIXELS_PER_SECOND, 320)
+  const timelineWidthPx = Math.max(totalReelDuration * pxPerSec, 320)
 
   const goalMarkers = buildGoalMarkers(goals, clips, introDuration)
 
@@ -212,13 +310,39 @@ export function TimelineTrack({
   }
 
   return (
-    <div className="overflow-x-auto pb-2">
+    <div>
+      {/* Zoom control */}
+      <div className="mb-1.5 flex items-center gap-2">
+        <svg className="h-3 w-3 shrink-0 text-neutral-500" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+          <path d="M6.5 1a5.5 5.5 0 100 11A5.5 5.5 0 006.5 1zM0 6.5a6.5 6.5 0 1111.56 4.06l3.69 3.69a.75.75 0 11-1.06 1.06l-3.69-3.69A6.5 6.5 0 010 6.5zM5 4.75a.75.75 0 011.5 0V6h1.25a.75.75 0 010 1.5H6.5v1.25a.75.75 0 01-1.5 0V7.5H3.75a.75.75 0 010-1.5H5V4.75z" />
+        </svg>
+        <input
+          type="range"
+          min={MIN_PX_PER_SEC}
+          max={MAX_PX_PER_SEC}
+          step={4}
+          value={pxPerSec}
+          onChange={(e) => setPxPerSec(Number(e.target.value))}
+          className="h-1 w-24 cursor-pointer accent-yellow-500"
+          title={`Timeline zoom: ${pxPerSec}px/s`}
+        />
+        <span className="text-[10px] tabular-nums text-neutral-500">{totalReelDuration > 0 ? `${Math.round(totalReelDuration)}s` : ""}</span>
+      </div>
+
+      <div className="overflow-x-auto pb-2">
       <div
-        className="relative"
+        className={`relative${onAddGoalAtReelTime ? " cursor-crosshair" : ""}`}
         style={{ width: timelineWidthPx, minWidth: "100%" }}
+        onClick={(e) => {
+          if (!onAddGoalAtReelTime || totalReelDuration <= 0) return
+          const rect = e.currentTarget.getBoundingClientRect()
+          const offsetX = e.clientX - rect.left
+          const reelTimeSec = (offsetX / timelineWidthPx) * totalReelDuration
+          onAddGoalAtReelTime(Math.max(0, Math.min(reelTimeSec, totalReelDuration)))
+        }}
       >
         {/* Time ruler */}
-        <div className="relative mb-1 h-6 border-b border-neutral-700 bg-neutral-950">
+        <div className="relative mb-1 h-5 border-b border-neutral-700 bg-neutral-950">
           {ticks.map((t) => (
             <div
               key={t}
@@ -258,8 +382,8 @@ export function TimelineTrack({
                   const trimmedDuration = Math.max(0, clip.trimEnd - clip.trimStart)
                   const widthPx =
                     totalReelDuration > 0
-                      ? Math.max(72, (trimmedDuration / totalReelDuration) * timelineWidthPx)
-                      : 120
+                      ? Math.max(56, (trimmedDuration / totalReelDuration) * timelineWidthPx)
+                      : 80
                   const hasGoals = goals.some((g) => g.clipId === clip.id)
                   return (
                     <ClipCell
@@ -268,7 +392,10 @@ export function TimelineTrack({
                       isSelected={selectedClipId === clip.id}
                       hasGoals={hasGoals}
                       widthPx={widthPx}
+                      pxPerSec={pxPerSec}
+                      goalTimesInClip={goalTimesByClip.get(clip.id) ?? []}
                       onSelect={onSelectClip}
+                      onTrim={onTrimClip}
                     />
                   )
                 })}
@@ -293,7 +420,7 @@ export function TimelineTrack({
                 <div className="rounded bg-yellow-500/90 px-1 py-0.5 text-[9px] font-bold text-black leading-none whitespace-nowrap">
                   ⚽
                 </div>
-                <div className="h-full w-px bg-yellow-500/60" style={{ height: 56 }} />
+                <div className="h-full w-px bg-yellow-500/60" style={{ height: 40 }} />
               </div>
             </div>
           )
@@ -314,6 +441,7 @@ export function TimelineTrack({
           </div>
         )}
       </div>
+    </div>
     </div>
   )
 }
