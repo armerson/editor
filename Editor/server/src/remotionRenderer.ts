@@ -94,6 +94,13 @@ const REMOTION_VIDEO_THREADS = Number(process.env.REMOTION_VIDEO_THREADS ?? 1)
 /** Cached bundle — rebuilt only when the process restarts. */
 let cachedBundle: { serveUrl: string } | null = null
 
+/**
+ * In-flight bundle promise — ensures only one webpack build runs at a time
+ * even if multiple render requests arrive before the first build completes.
+ * Resolves to the serveUrl string, same value as bundle() returns.
+ */
+let bundleInProgress: Promise<string> | null = null
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  Types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -163,6 +170,10 @@ function logPreFlight(jobId: string, project: Project): {
     {
       jobId,
       mode: USE_LAMBDA ? "lambda" : "local",
+      ...(USE_LAMBDA
+        ? { lambdaServeUrl: LAMBDA_SERVE_URL ?? "(not set)", lambdaFunction: LAMBDA_FUNCTION_NAME ?? "(not set)" }
+        : { bundleReady: !!cachedBundle }
+      ),
       clipCount,
       totalClipSeconds: Math.round(totalClipSeconds),
       introDurationSeconds: project.intro?.durationSeconds ?? 3,
@@ -319,17 +330,21 @@ async function renderLocally({
   await fs.mkdir(rendersDir, { recursive: true })
   const outPath = localRenderedPath(rendersDir, jobId)
 
-  // Bundle (cached per process)
+  // Bundle (cached per process; shared promise prevents duplicate builds)
   if (!cachedBundle) {
-    const entryPoint = path.join(remotionRoot, "src", "index.ts")
-    logger.info({ remotionRoot, entryPoint }, "bundling Remotion project")
+    if (!bundleInProgress) {
+      const entryPoint = path.join(remotionRoot, "src", "index.ts")
+      const outDir = path.join(remotionRoot, ".remotion-bundle")
+      logger.info({ remotionRoot, entryPoint, outDir }, "bundling Remotion project")
 
-    const serveUrl = await bundle(entryPoint, (progress) => {
-      logger.debug({ bundle_progress: Math.round(progress * 100) }, "bundle progress")
-    }, {
-      outDir: path.join(remotionRoot, ".remotion-bundle"),
-    })
+      bundleInProgress = bundle(entryPoint, (progress) => {
+        logger.debug({ bundle_progress: Math.round(progress * 100) }, "bundle progress")
+      }, { outDir })
+    } else {
+      logger.info("waiting for in-progress bundle")
+    }
 
+    const serveUrl = await bundleInProgress
     cachedBundle = { serveUrl }
     logger.info({ serveUrl }, "bundle ready")
   }
@@ -442,4 +457,42 @@ export async function renderProjectToMp4(params: RenderParams): Promise<RenderRe
 /** Invalidate the local bundle cache (useful for testing or forced re-bundle). */
 export function clearBundleCache(): void {
   cachedBundle = null
+  bundleInProgress = null
+}
+
+/**
+ * Pre-warm the local Remotion bundle in the background so the first render
+ * request doesn't pay the ~60-90 s webpack build cost.
+ *
+ * Safe to call at server startup: the in-progress promise is shared, so
+ * concurrent render requests won't trigger duplicate builds.
+ *
+ * No-op when Lambda mode is active (bundle is not used).
+ */
+export function prewarmBundle(): void {
+  if (USE_LAMBDA) return
+
+  const remotionRoot = process.env.REMOTION_ROOT
+  if (!remotionRoot) {
+    logger.warn("prewarmBundle: REMOTION_ROOT not set, skipping pre-warm")
+    return
+  }
+
+  if (cachedBundle || bundleInProgress) return
+
+  const entryPoint = path.join(remotionRoot, "src", "index.ts")
+  const outDir = path.join(remotionRoot, ".remotion-bundle")
+  logger.info({ remotionRoot, entryPoint, outDir }, "pre-warming Remotion bundle")
+
+  bundleInProgress = bundle(entryPoint, (progress) => {
+    logger.debug({ bundle_progress: Math.round(progress * 100) }, "pre-warm bundle progress")
+  }, { outDir })
+
+  bundleInProgress.then((serveUrl) => {
+    cachedBundle = { serveUrl }
+    logger.info({ serveUrl }, "pre-warm bundle ready")
+  }).catch((err) => {
+    logger.error({ err }, "pre-warm bundle failed — will retry on first render")
+    bundleInProgress = null
+  })
 }
