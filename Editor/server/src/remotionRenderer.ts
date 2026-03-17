@@ -370,6 +370,9 @@ async function renderLocally({
         logger.error({ jobId, text, stackTrace }, "renderer [browser error]")
       } else if (type === "warning") {
         logger.warn({ jobId, text }, "renderer [browser warning]")
+      } else if (type === "log" || type === "info") {
+        // Captures console.log / console.info from HighlightReel diagnostics.
+        logger.info({ jobId, text }, "renderer [browser log]")
       }
     },
     onProgress: ({ progress, renderedFrames }) => {

@@ -75,7 +75,12 @@ const CumulativeScoreboard: React.FC<{
   clips: HighlightReelData['clips'];
   goals: GoalEvent[] | undefined;
   scoreboard: HighlightReelData['scoreboard'] | undefined;
-}> = ({ fps, clipStartFrames, clips, goals, scoreboard }) => {
+  /** Absolute frame at which the scoreboard becomes active (= intro duration in frames). */
+  introDurationFrames: number;
+}> = ({ fps, clipStartFrames, clips, goals, scoreboard, introDurationFrames }) => {
+  // CumulativeScoreboard is rendered without a parent Sequence so useCurrentFrame()
+  // returns the ABSOLUTE composition frame — consistent with the absolute clipStartFrames
+  // and goal atFrame values derived from the adapter.
   const frame = useCurrentFrame();
 
   const absoluteGoals = React.useMemo(
@@ -83,6 +88,7 @@ const CumulativeScoreboard: React.FC<{
     [goals, clips, clipStartFrames, fps]
   );
 
+  // ── 1. Accumulate goals up to this frame ──────────────────────────────────
   const baseHome = scoreboard?.homeScore ?? 0;
   const baseAway = scoreboard?.awayScore ?? 0;
 
@@ -97,15 +103,7 @@ const CumulativeScoreboard: React.FC<{
     if (g.side === 'away') away += 1;
   }
 
-  // Show scorer callout for 5 seconds after the goal happens (matches editor preview).
-  const showScorerForFrames = Math.round(5 * fps);
-  const scorer =
-    lastGoal && frame - lastGoal.atFrame >= 0 && frame - lastGoal.atFrame <= showScorerForFrames
-      ? lastGoal
-      : null;
-
-  // Determine which clip is currently active at this frame to drive
-  // per‑clip scoreboard behaviour (visibility, clock label, scorer callout).
+  // ── 2. Determine which clip is active at this absolute frame ───────────────
   let currentClip: HighlightReelData['clips'][0] | null = null;
   for (let i = 0; i < clips.length; i++) {
     const start = clipStartFrames[i] ?? 0;
@@ -117,6 +115,23 @@ const CumulativeScoreboard: React.FC<{
       break;
     }
   }
+
+  // ── 3. Scorer callout ─────────────────────────────────────────────────────
+  // Show for 5 seconds after a goal. Only show when the goal happened in the
+  // current clip — the editor only shows the scorer within the clip that
+  // contains the goal, not in subsequent clips.
+  const showScorerForFrames = Math.round(5 * fps);
+  const scorer =
+    lastGoal &&
+    frame - lastGoal.atFrame >= 0 &&
+    frame - lastGoal.atFrame <= showScorerForFrames &&
+    lastGoal.clipId === currentClip?.id
+      ? lastGoal
+      : null;
+
+  // ── 4. Per-clip visibility flags ──────────────────────────────────────────
+  // Hide everything during the intro (no clip active before clipStartFrames[0]).
+  if (frame < introDurationFrames) return null;
 
   // Intro/outro clips must never show scoreboard or scorer — enforced here in
   // the renderer regardless of per-clip showScoreboard / showScorerAfterGoal flags.
@@ -136,10 +151,8 @@ const CumulativeScoreboard: React.FC<{
       : Boolean(currentClip.showScorerAfterGoal);
 
   // Default false: only show when the adapter explicitly set visible: true.
-  // ?? true would render a blank overlay (0–0, no team names) when scoreboard is undefined.
   const visible = (scoreboard?.visible ?? false) && clipShowScoreboard;
   const clockOrPeriod = clipMinuteMarker ?? scoreboard?.clockOrPeriod;
-
   const effectiveScorer = clipAllowsScorer ? scorer : null;
 
   return (
@@ -303,17 +316,17 @@ export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
         </Sequence>
       ) : null}
 
-      {/* Overlay layers: scoreboard and lower-thirds; set visible: true and pass data to show. */}
-      {/* Start after the intro so the scoreboard doesn't overlay the intro card. */}
-      <Sequence from={introDurationFrames} durationInFrames={Infinity} name="Scoreboard" layout="none">
-        <CumulativeScoreboard
-          fps={fps}
-          clipStartFrames={clipStartFrames}
-          clips={clips}
-          goals={props.goals}
-          scoreboard={props.scoreboard}
-        />
-      </Sequence>
+      {/* Scoreboard overlay: rendered from frame 0 without a Sequence offset so that
+          useCurrentFrame() inside CumulativeScoreboard returns absolute frames (matching
+          clipStartFrames and goal atFrame values). Intro hiding is handled internally. */}
+      <CumulativeScoreboard
+        fps={fps}
+        clipStartFrames={clipStartFrames}
+        clips={clips}
+        goals={props.goals}
+        scoreboard={props.scoreboard}
+        introDurationFrames={introDurationFrames}
+      />
       <Sequence from={0} durationInFrames={Infinity} name="Lower thirds" layout="none">
         <LowerThirdsOverlay {...(props.lowerThirds ?? {})} />
       </Sequence>
