@@ -52,16 +52,24 @@ function buildAbsoluteGoals(params: {
   if (!goals?.length) return [];
 
   const clipIdToStartFrame = new Map<string, number>();
+  const clipIdToTrimStart = new Map<string, number>();
   for (let i = 0; i < clips.length; i++) {
-    const id = clips[i]?.id;
-    if (id) clipIdToStartFrame.set(id, clipStartFrames[i] ?? 0);
+    const clip = clips[i];
+    const id = clip?.id;
+    if (id) {
+      clipIdToStartFrame.set(id, clipStartFrames[i] ?? 0);
+      clipIdToTrimStart.set(id, clip?.trimStart ?? 0);
+    }
   }
 
   const out: AbsoluteGoal[] = [];
   for (const g of goals) {
     const start = clipIdToStartFrame.get(g.clipId);
     if (start == null) continue;
-    const atFrame = start + Math.round(g.timeInClip * fps);
+    // timeInClip is an absolute source-video timestamp; subtract trimStart to get
+    // the clip-relative offset, then add the clip's start frame in the reel.
+    const trimStart = clipIdToTrimStart.get(g.clipId) ?? 0;
+    const atFrame = start + Math.round((g.timeInClip - trimStart) * fps);
     out.push({ ...g, atFrame });
   }
 
