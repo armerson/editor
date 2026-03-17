@@ -32,53 +32,53 @@ export const ScoreboardOverlay: React.FC<ScoreboardOverlayProps> = ({
           position: 'relative',
           display: 'flex',
           alignItems: 'center',
-          gap: 24,
-          padding: '12px 32px',
+          gap: 40,
+          padding: '20px 48px',
           backgroundColor: 'rgba(0,0,0,0.75)',
-          borderRadius: 8,
+          borderRadius: 12,
           fontFamily: 'system-ui, sans-serif',
           color: '#fff',
-          fontSize: 20,
+          fontSize: 36,
         }}
       >
-        <span style={{ fontWeight: 600, minWidth: 120, textAlign: 'right' }}>
+        <span style={{ fontWeight: 600, minWidth: 200, textAlign: 'right' }}>
           {homeTeamName}
         </span>
         <span
           style={{
-            fontSize: 28,
+            fontSize: 48,
             fontWeight: 700,
-            minWidth: 60,
+            minWidth: 100,
             textAlign: 'center',
           }}
         >
           {homeScore} – {awayScore}
         </span>
-        <span style={{ fontWeight: 600, minWidth: 120, textAlign: 'left' }}>
+        <span style={{ fontWeight: 600, minWidth: 200, textAlign: 'left' }}>
           {awayTeamName}
         </span>
         {clockOrPeriod ? (
           <span
             style={{
-              marginLeft: 16,
-              paddingLeft: 16,
+              marginLeft: 24,
+              paddingLeft: 24,
               borderLeft: '1px solid rgba(255,255,255,0.3)',
-              fontSize: 18,
+              fontSize: 32,
             }}
           >
             {clockOrPeriod}
           </span>
         ) : null}
         {label ? (
-          <span style={{ opacity: 0.8, fontSize: 14 }}>{label}</span>
+          <span style={{ opacity: 0.8, fontSize: 28 }}>{label}</span>
         ) : null}
         {scorerName ? (
           <span
             style={{
-              marginLeft: 16,
-              paddingLeft: 16,
+              marginLeft: 24,
+              paddingLeft: 24,
               borderLeft: '1px solid rgba(255,255,255,0.3)',
-              fontSize: 14,
+              fontSize: 28,
               opacity: 0.95,
               whiteSpace: 'nowrap',
             }}
