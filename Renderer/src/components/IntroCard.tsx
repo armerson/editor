@@ -54,8 +54,8 @@ function BadgePlaceholder({
   return (
     <div
       style={{
-        width: 200,
-        height: 200,
+        width: 160,
+        height: 160,
         borderRadius: '50%',
         border: '2px dashed rgba(255,255,255,0.15)',
         background: 'rgba(255,255,255,0.04)',
@@ -164,7 +164,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
         alignItems: 'center',
         flexDirection: 'column',
         opacity: cardOpacity,
-        padding: 48,
+        padding: 36,
         overflow: 'hidden',
       }}
     >
@@ -186,8 +186,8 @@ export const IntroCard: React.FC<IntroCardProps> = ({
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'flex-start',
-          gap: 56,
-          marginBottom: 32,
+          gap: 40,
+          marginBottom: 24,
           width: '100%',
           justifyContent: 'center',
         }}
@@ -198,8 +198,8 @@ export const IntroCard: React.FC<IntroCardProps> = ({
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: 14,
-            width: 220,
+            gap: 10,
+            width: 180,
           }}
         >
           {effectiveHomeBadge ? (
@@ -207,8 +207,8 @@ export const IntroCard: React.FC<IntroCardProps> = ({
               src={effectiveHomeBadge}
               delayRenderTimeoutInMilliseconds={IMG_TIMEOUT_MS}
               style={{
-                width: 200,
-                height: 200,
+                width: 160,
+                height: 160,
                 objectFit: 'contain',
                 borderRadius: '50%',
                 boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 0 2.5px rgba(255,255,255,0.12)',
@@ -225,7 +225,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
           <span
             style={{
               fontFamily: 'system-ui, sans-serif',
-              fontSize: 22,
+              fontSize: 18,
               fontWeight: 700,
               color: 'rgba(255,255,255,0.92)',
               textAlign: 'center',
@@ -255,7 +255,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
           <span
             style={{
               fontFamily: 'system-ui, sans-serif',
-              fontSize: 34,
+              fontSize: 26,
               fontWeight: 900,
               color: 'rgba(255,255,255,0.50)',
               letterSpacing: 3,
@@ -282,8 +282,8 @@ export const IntroCard: React.FC<IntroCardProps> = ({
                 src={effectiveAwayBadge}
                 delayRenderTimeoutInMilliseconds={IMG_TIMEOUT_MS}
                 style={{
-                  width: 200,
-                  height: 200,
+                  width: 160,
+                  height: 160,
                   objectFit: 'contain',
                   borderRadius: '50%',
                   boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 0 2.5px rgba(255,255,255,0.12)',
@@ -347,7 +347,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
         {score && (
           <span
             style={{
-              fontSize: 48,
+              fontSize: 38,
               fontWeight: 800,
               color: '#facc15',
               lineHeight: 1,
