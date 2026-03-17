@@ -224,9 +224,16 @@ export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
 
   // ── Diagnostics (captured by server onBrowserLog) ─────────────────────────
   logOnce(frame, `clips=${clips.length} intro=${introDurationFrames}f total=${acc}f fps=${fps}`)
+  logOnce(frame, `scoreboard: home=${props.scoreboard?.homeTeamName ?? '(none)'} ${props.scoreboard?.homeScore ?? 0} – away=${props.scoreboard?.awayTeamName ?? '(none)'} ${props.scoreboard?.awayScore ?? 0} visible=${props.scoreboard?.visible ?? false}`)
+  logOnce(frame, `goals=${props.goals?.length ?? 0} clipAudioOn=${props.music?.clipAudioOn ?? false}`)
   for (let i = 0; i < clips.length; i++) {
     const c = clips[i];
-    logOnce(frame, `clip[${i + 1}] "${c.name ?? '?'}" src=${c.src ? 'ok' : 'MISSING'} trim=${c.trimStart ?? 0}-${c.trimEnd ?? '?'} role=${c.role ?? 'normal'}`)
+    logOnce(frame, `clip[${i + 1}] "${c.name ?? '?'}" src=${c.src ? 'ok' : 'MISSING'} trim=${c.trimStart ?? 0}-${c.trimEnd ?? '?'} role=${c.role ?? 'normal'} muteAudio=${c.muteAudio ?? false}`)
+  }
+  if (props.goals?.length) {
+    for (const g of props.goals) {
+      logOnce(frame, `goal: clipId=${g.clipId} t=${g.timeInClip}s side=${g.side} scorer=${g.scorerName ?? '(none)'}`)
+    }
   }
   // Warn about dropped clips (had no src after filtering)
   const droppedCount = allClips.length - clips.length;

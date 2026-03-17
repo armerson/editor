@@ -22,8 +22,9 @@ export const ScoreboardOverlay: React.FC<ScoreboardOverlayProps> = ({
       style={{
         pointerEvents: 'none',
         justifyContent: 'flex-start',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         paddingTop: 24,
+        paddingLeft: 24,
       }}
     >
       <div
