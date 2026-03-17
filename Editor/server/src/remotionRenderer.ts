@@ -183,10 +183,34 @@ function logPreFlight(jobId: string, project: Project): {
         trimStart: clip.trimStart,
         trimEnd: clip.trimEnd,
         role: clip.role ?? "normal",
+        muteAudio: clip.muteAudio ?? false,
       },
       "clip pre-flight"
     )
   }
+
+  // Log scoreboard, goals and audio settings so we can verify parity with the editor.
+  logger.info(
+    {
+      jobId,
+      scoreboard: {
+        homeTeamName: project.scoreboard?.homeTeamName ?? "(none)",
+        awayTeamName: project.scoreboard?.awayTeamName ?? "(none)",
+        homeScore: project.scoreboard?.homeScore ?? 0,
+        awayScore: project.scoreboard?.awayScore ?? 0,
+      },
+      goalCount: (project.goals ?? []).length,
+      goals: (project.goals ?? []).map((g) => ({
+        clipId: g.clipId,
+        timeInClip: g.timeInClip,
+        side: g.side,
+        scorerName: g.scorerName,
+      })),
+      clipAudioOn: project.music?.clipAudioOn ?? true,
+      mutedClips: clips.filter((c) => c.muteAudio).map((c) => c.name ?? c.id),
+    },
+    "render parity pre-flight"
+  )
 
   return { clipCount, totalClipSeconds }
 }
@@ -346,6 +370,9 @@ async function renderLocally({
         logger.error({ jobId, text, stackTrace }, "renderer [browser error]")
       } else if (type === "warning") {
         logger.warn({ jobId, text }, "renderer [browser warning]")
+      } else if (type === "log" || type === "info") {
+        // Captures console.log / console.info from HighlightReel diagnostics.
+        logger.info({ jobId, text }, "renderer [browser log]")
       }
     },
     onProgress: ({ progress, renderedFrames }) => {

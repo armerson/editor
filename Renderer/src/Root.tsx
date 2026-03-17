@@ -10,9 +10,6 @@ import { projectJsonToHighlightReelData, ProjectJson } from './data/projectAdapt
 
 const FPS = 30;
 
-/** Landscape preset only for first working build; add square/vertical later. */
-const LANDSCAPE_PRESET = OUTPUT_PRESETS.landscape;
-
 /** Minimal default project JSON for Studio when no props are passed. */
 const DEFAULT_PROJECT_JSON: ProjectJson = {
   version: 1,
@@ -41,21 +38,27 @@ export const RemotionRoot: React.FC = () => {
         id="HighlightReel"
         component={HighlightReel}
         fps={FPS}
-        width={LANDSCAPE_PRESET.width}
-        height={LANDSCAPE_PRESET.height}
+        width={OUTPUT_PRESETS.landscape.width}
+        height={OUTPUT_PRESETS.landscape.height}
         /** Default props are project JSON; calculateMetadata transforms them to HighlightReelProps at runtime. */
         defaultProps={DEFAULT_PROJECT_JSON as unknown as HighlightReelProps}
         calculateMetadata={({ props }) => {
           // 1) Coerce incoming props (from backend or Studio) to ProjectJson.
           const projectProps = (props ?? {}) as ProjectJson;
 
-          // 2) Safely transform to HighlightReelData using the adapter.
+          // 2) Resolve output dimensions from the project's presetId (default: landscape).
+          const presetId = typeof projectProps.presetId === 'string' && projectProps.presetId in OUTPUT_PRESETS
+            ? projectProps.presetId
+            : 'landscape';
+          const preset = OUTPUT_PRESETS[presetId]!;
+
+          // 3) Safely transform to HighlightReelData using the adapter.
           let reelProps: HighlightReelProps;
           try {
             const transformed = projectJsonToHighlightReelData(projectProps, {
               videoBasePath: '/',
             });
-            reelProps = { ...transformed, presetId: 'landscape' };
+            reelProps = { ...transformed, presetId };
             if (!Array.isArray(reelProps.clips)) {
               reelProps.clips = [];
             }
@@ -69,14 +72,14 @@ export const RemotionRoot: React.FC = () => {
             reelProps = { ...fallbackTransformed, presetId: 'landscape' };
           }
 
-          // 3) Duration and fps are calculated from the transformed reel props.
+          // 4) Duration and fps are calculated from the transformed reel props.
           const fps = reelProps.fps ?? FPS;
           const durationInFrames = getHighlightReelDurationInFrames(reelProps);
 
-          // 4) Return updated metadata, including transformed props for the composition.
+          // 5) Return updated metadata with correct dimensions for the chosen preset.
           return {
-            width: LANDSCAPE_PRESET.width,
-            height: LANDSCAPE_PRESET.height,
+            width: preset.width,
+            height: preset.height,
             fps,
             durationInFrames,
             props: reelProps,
