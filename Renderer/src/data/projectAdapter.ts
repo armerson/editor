@@ -29,6 +29,8 @@ export type ProjectClip = {
   showScoreboard?: boolean
   minuteMarker?: string
   showScorerAfterGoal?: boolean
+  /** When true the clip's original audio track is silenced in the render. */
+  muteAudio?: boolean
   [key: string]: unknown
 }
 
@@ -185,6 +187,7 @@ export function projectJsonToHighlightReelData(
       showScoreboard: pc.showScoreboard,
       minuteMarker: pc.minuteMarker,
       showScorerAfterGoal: pc.showScorerAfterGoal,
+      muteAudio: typeof pc.muteAudio === "boolean" ? pc.muteAudio : false,
     })
   }
 
@@ -230,6 +233,11 @@ export function projectJsonToHighlightReelData(
     const musicBase = (videoBasePath ?? "/").replace(/\/$/, "")
     const resolvedSrc = explicitUrl ?? explicitSrc ?? (fileName ? `${musicBase}/${fileName}` : null)
 
+    // clipAudioOn must be preserved even when there is no music file so that
+    // HighlightReel can correctly mute/unmute clip audio tracks.
+    const clipAudioOn: boolean | undefined =
+      typeof pm.clipAudioOn === "boolean" ? pm.clipAudioOn : undefined
+
     if (resolvedSrc) {
       const rawEndInReel =
         typeof pm.musicEndInReel === "number"
@@ -245,9 +253,14 @@ export function projectJsonToHighlightReelData(
         startInReel: typeof pm.musicStartInReel === "number" ? pm.musicStartInReel : undefined,
         endInReel: rawEndInReel,
         fadeOutDuration: typeof pm.fadeOutDuration === "number" ? pm.fadeOutDuration : undefined,
-        clipAudioOn: typeof pm.clipAudioOn === "boolean" ? pm.clipAudioOn : undefined,
+        clipAudioOn,
         loop: true,
       }
+    } else if (clipAudioOn !== undefined) {
+      // No music file but clipAudioOn is explicitly set. Create a minimal settings
+      // object so HighlightReel can read the flag. The empty src prevents the
+      // MusicTrack audio element from rendering (guarded by `props.music?.src`).
+      music = { src: "", clipAudioOn }
     }
   }
 

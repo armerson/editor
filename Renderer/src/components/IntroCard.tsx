@@ -1,5 +1,5 @@
 import React from 'react';
-import { AbsoluteFill, Img, useCurrentFrame, interpolate, spring } from 'remotion';
+import { AbsoluteFill, Img, useCurrentFrame, interpolate, spring, useVideoConfig } from 'remotion';
 import type { IntroCardData } from '../types/reel';
 
 /** Frames for overall card fade-in / fade-out — dissolves into first clip. */
@@ -46,16 +46,20 @@ function BadgePlaceholder({
   label,
   scale,
   opacity,
+  sizePx,
 }: {
   label: string;
   scale: number;
   opacity: number;
+  sizePx: number;
 }) {
   return (
     <div
       style={{
         width: 160,
         height: 160,
+        width: sizePx,
+        height: sizePx,
         borderRadius: '50%',
         border: '2px dashed rgba(255,255,255,0.15)',
         background: 'rgba(255,255,255,0.04)',
@@ -67,7 +71,7 @@ function BadgePlaceholder({
         flexShrink: 0,
       }}
     >
-      <span style={{ fontFamily: 'system-ui, sans-serif', fontSize: 16, color: 'rgba(255,255,255,0.3)' }}>
+      <span style={{ fontFamily: 'system-ui, sans-serif', fontSize: Math.round(sizePx / 10), color: 'rgba(255,255,255,0.3)' }}>
         {label}
       </span>
     </div>
@@ -87,6 +91,12 @@ export const IntroCard: React.FC<IntroCardProps> = ({
   fps: fpsProp = 30,
 }) => {
   const frame = useCurrentFrame();
+  const { width, height } = useVideoConfig();
+  // Scale relative to 1080p so the intro looks proportionally identical
+  // across landscape (1920×1080), square (1080×1080) and vertical (1080×1920).
+  const s = Math.min(width, height) / 1080;
+  const badgeSizePx = Math.round(140 * s);
+  const badgeContainerWidthPx = Math.round(160 * s);
 
   // ── Overall card fade-in/out ───────────────────────────────────────────────
   const cardOpacity = interpolate(
@@ -165,6 +175,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
         flexDirection: 'column',
         opacity: cardOpacity,
         padding: 36,
+        padding: Math.round(28 * s),
         overflow: 'hidden',
       }}
     >
@@ -188,6 +199,8 @@ export const IntroCard: React.FC<IntroCardProps> = ({
           alignItems: 'flex-start',
           gap: 40,
           marginBottom: 24,
+          gap: Math.round(36 * s),
+          marginBottom: Math.round(20 * s),
           width: '100%',
           justifyContent: 'center',
         }}
@@ -200,6 +213,8 @@ export const IntroCard: React.FC<IntroCardProps> = ({
             alignItems: 'center',
             gap: 10,
             width: 180,
+            gap: Math.round(10 * s),
+            width: badgeContainerWidthPx,
           }}
         >
           {effectiveHomeBadge ? (
@@ -209,6 +224,8 @@ export const IntroCard: React.FC<IntroCardProps> = ({
               style={{
                 width: 160,
                 height: 160,
+                width: badgeSizePx,
+                height: badgeSizePx,
                 objectFit: 'contain',
                 borderRadius: '50%',
                 boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 0 2.5px rgba(255,255,255,0.12)',
@@ -219,13 +236,14 @@ export const IntroCard: React.FC<IntroCardProps> = ({
               }}
             />
           ) : (
-            <BadgePlaceholder label="Home" scale={homeBadgeScale} opacity={homeBadgeOpacity} />
+            <BadgePlaceholder label="Home" scale={homeBadgeScale} opacity={homeBadgeOpacity} sizePx={badgeSizePx} />
           )}
           {/* Team name: wraps rather than truncates */}
           <span
             style={{
               fontFamily: 'system-ui, sans-serif',
               fontSize: 18,
+              fontSize: Math.round(16 * s),
               fontWeight: 700,
               color: 'rgba(255,255,255,0.92)',
               textAlign: 'center',
@@ -247,7 +265,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            paddingTop: 80,
+            paddingTop: Math.round(55 * s),
             flexShrink: 0,
             opacity: vsOpacity,
           }}
@@ -256,9 +274,10 @@ export const IntroCard: React.FC<IntroCardProps> = ({
             style={{
               fontFamily: 'system-ui, sans-serif',
               fontSize: 26,
+              fontSize: Math.round(26 * s),
               fontWeight: 900,
               color: 'rgba(255,255,255,0.50)',
-              letterSpacing: 3,
+              letterSpacing: Math.round(3 * s),
               lineHeight: 1,
             }}
           >
@@ -273,8 +292,8 @@ export const IntroCard: React.FC<IntroCardProps> = ({
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: 14,
-              width: 220,
+              gap: Math.round(10 * s),
+              width: badgeContainerWidthPx,
             }}
           >
             {effectiveAwayBadge ? (
@@ -284,6 +303,8 @@ export const IntroCard: React.FC<IntroCardProps> = ({
                 style={{
                   width: 160,
                   height: 160,
+                  width: badgeSizePx,
+                  height: badgeSizePx,
                   objectFit: 'contain',
                   borderRadius: '50%',
                   boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 0 2.5px rgba(255,255,255,0.12)',
@@ -294,13 +315,13 @@ export const IntroCard: React.FC<IntroCardProps> = ({
                 }}
               />
             ) : (
-              <BadgePlaceholder label="Away" scale={awayBadgeScale} opacity={awayBadgeOpacity} />
+              <BadgePlaceholder label="Away" scale={awayBadgeScale} opacity={awayBadgeOpacity} sizePx={badgeSizePx} />
             )}
             {/* Team name: wraps rather than truncates */}
             <span
               style={{
                 fontFamily: 'system-ui, sans-serif',
-                fontSize: 22,
+                fontSize: Math.round(16 * s),
                 fontWeight: 700,
                 color: 'rgba(255,255,255,0.92)',
                 textAlign: 'center',
@@ -321,11 +342,11 @@ export const IntroCard: React.FC<IntroCardProps> = ({
       {/* ── Divider ────────────────────────────────────────────────────────── */}
       <div
         style={{
-          width: 220,
+          width: Math.round(200 * s),
           height: 1,
           background:
             'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.12) 30%, rgba(255,255,255,0.12) 70%, transparent 100%)',
-          marginBottom: 24,
+          marginBottom: Math.round(20 * s),
           opacity: dividerOpacity,
           flexShrink: 0,
         }}
@@ -337,7 +358,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: 6,
+          gap: Math.round(5 * s),
           textAlign: 'center',
           fontFamily: 'system-ui, sans-serif',
           opacity: subtitleOpacity,
@@ -348,6 +369,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
           <span
             style={{
               fontSize: 38,
+              fontSize: Math.round(34 * s),
               fontWeight: 800,
               color: '#facc15',
               lineHeight: 1,
@@ -359,23 +381,23 @@ export const IntroCard: React.FC<IntroCardProps> = ({
           </span>
         )}
         {matchDate && (
-          <span style={{ fontSize: 18, color: 'rgba(255,255,255,0.45)' }}>
+          <span style={{ fontSize: Math.round(15 * s), color: 'rgba(255,255,255,0.45)' }}>
             {matchDate}
           </span>
         )}
         {ageGroup && (
-          <span style={{ fontSize: 16, color: 'rgba(255,255,255,0.32)' }}>
+          <span style={{ fontSize: Math.round(13 * s), color: 'rgba(255,255,255,0.32)' }}>
             {ageGroup}
           </span>
         )}
         <span
           style={{
-            fontSize: 13,
+            fontSize: Math.round(11 * s),
             fontWeight: 700,
-            letterSpacing: 4,
+            letterSpacing: Math.round(4 * s),
             textTransform: 'uppercase',
             color: 'rgba(99,102,241,0.85)',
-            marginTop: 6,
+            marginTop: Math.round(5 * s),
           }}
         >
           Match Highlights
@@ -387,7 +409,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
         <h1
           style={{
             fontFamily: 'system-ui, sans-serif',
-            fontSize: 64,
+            fontSize: Math.round(64 * s),
             fontWeight: 700,
             color: '#fff',
             margin: 0,

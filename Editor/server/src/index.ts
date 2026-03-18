@@ -12,7 +12,7 @@ import {
   getActiveJobCount,
   recoverInterruptedJobs,
 } from "./renderJobStore"
-import { renderProjectToMp4 } from "./remotionRenderer"
+import { renderProjectToMp4, prewarmBundle } from "./remotionRenderer"
 import { uploadRenderedMp4 } from "./storageUploader"
 import type {
   StartRenderResponse,
@@ -45,6 +45,11 @@ try {
 } catch (err) {
   logger.error({ err }, "Failed to recover interrupted jobs, continuing anyway")
 }
+
+// ── Pre-warm the Remotion bundle in the background ────────────────────────────
+// Starts the webpack build immediately so the first render request doesn't
+// pay the ~60-90 s cold-start cost. No-op in Lambda mode.
+prewarmBundle()
 
 // ── Express app ───────────────────────────────────────────────────────────────
 const app = express()
