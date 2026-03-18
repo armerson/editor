@@ -95,8 +95,8 @@ export const IntroCard: React.FC<IntroCardProps> = ({
   // Scale relative to 1080p so the intro looks proportionally identical
   // across landscape (1920×1080), square (1080×1080) and vertical (1080×1920).
   const s = Math.min(width, height) / 1080;
-  const badgeSizePx = Math.round(140 * s);
-  const badgeContainerWidthPx = Math.round(160 * s);
+  const badgeSizePx = Math.round(200 * s);
+  const badgeContainerWidthPx = Math.round(220 * s);
 
   // ── Overall card fade-in/out ───────────────────────────────────────────────
   const cardOpacity = interpolate(

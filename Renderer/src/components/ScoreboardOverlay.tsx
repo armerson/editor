@@ -28,8 +28,8 @@ export const ScoreboardOverlay: React.FC<ScoreboardOverlayProps> = ({
         pointerEvents: 'none',
         justifyContent: 'flex-start',
         alignItems: 'flex-start',
-        paddingTop: Math.round(40 * s),
-        paddingLeft: Math.round(40 * s),
+        paddingTop: Math.round(24 * s),
+        paddingLeft: Math.round(24 * s),
       }}
     >
       <div
@@ -37,59 +37,58 @@ export const ScoreboardOverlay: React.FC<ScoreboardOverlayProps> = ({
           position: 'relative',
           display: 'flex',
           alignItems: 'center',
-          gap: Math.round(56 * s),
-          padding: `${Math.round(22 * s)}px ${Math.round(52 * s)}px`,
+          gap: Math.round(16 * s),
+          padding: `${Math.round(10 * s)}px ${Math.round(22 * s)}px`,
           backgroundColor: 'rgba(0,0,0,0.75)',
-          borderRadius: Math.round(16 * s),
+          borderRadius: Math.round(8 * s),
           fontFamily: 'system-ui, sans-serif',
           color: '#fff',
-          fontSize: Math.round(52 * s),
+          fontSize: Math.round(26 * s),
         }}
       >
-        <span style={{ fontWeight: 600, minWidth: Math.round(160 * s), textAlign: 'right' }}>
+        <span style={{ fontWeight: 600, minWidth: Math.round(120 * s), textAlign: 'right' }}>
           {homeTeamName}
         </span>
         <span
           style={{
-            fontSize: Math.round(68 * s),
+            fontSize: Math.round(34 * s),
             fontWeight: 700,
-            minWidth: Math.round(96 * s),
+            minWidth: Math.round(72 * s),
             textAlign: 'center',
           }}
         >
           {homeScore} – {awayScore}
         </span>
-        <span style={{ fontWeight: 600, minWidth: Math.round(160 * s), textAlign: 'left' }}>
+        <span style={{ fontWeight: 600, minWidth: Math.round(120 * s), textAlign: 'left' }}>
           {awayTeamName}
         </span>
         {clockOrPeriod ? (
           <span
             style={{
-              marginLeft: Math.round(28 * s),
-              paddingLeft: Math.round(28 * s),
+              marginLeft: Math.round(16 * s),
+              paddingLeft: Math.round(16 * s),
               borderLeft: '1px solid rgba(255,255,255,0.3)',
-              fontSize: Math.round(44 * s),
+              fontSize: Math.round(22 * s),
             }}
           >
             {clockOrPeriod}
           </span>
         ) : null}
         {label ? (
-          <span style={{ opacity: 0.8, fontSize: Math.round(40 * s) }}>{label}</span>
+          <span style={{ opacity: 0.8, fontSize: Math.round(20 * s) }}>{label}</span>
         ) : null}
         {scorerName ? (
           <span
             style={{
-              marginLeft: Math.round(28 * s),
-              paddingLeft: Math.round(28 * s),
+              marginLeft: Math.round(16 * s),
+              paddingLeft: Math.round(16 * s),
               borderLeft: '1px solid rgba(255,255,255,0.3)',
-              fontSize: Math.round(40 * s),
+              fontSize: Math.round(22 * s),
               opacity: 0.95,
               whiteSpace: 'nowrap',
             }}
           >
-            {scorerSide ? (scorerSide === 'home' ? `${homeTeamName}: ` : `${awayTeamName}: `) : ''}
-            {scorerName}
+            ⚽ {scorerName}
           </span>
         ) : null}
       </div>
