@@ -56,6 +56,8 @@ function BadgePlaceholder({
   return (
     <div
       style={{
+        width: 160,
+        height: 160,
         width: sizePx,
         height: sizePx,
         borderRadius: '50%',
@@ -93,8 +95,8 @@ export const IntroCard: React.FC<IntroCardProps> = ({
   // Scale relative to 1080p so the intro looks proportionally identical
   // across landscape (1920×1080), square (1080×1080) and vertical (1080×1920).
   const s = Math.min(width, height) / 1080;
-  const badgeSizePx = Math.round(140 * s);
-  const badgeContainerWidthPx = Math.round(160 * s);
+  const badgeSizePx = Math.round(200 * s);
+  const badgeContainerWidthPx = Math.round(220 * s);
 
   // ── Overall card fade-in/out ───────────────────────────────────────────────
   const cardOpacity = interpolate(
@@ -172,6 +174,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
         alignItems: 'center',
         flexDirection: 'column',
         opacity: cardOpacity,
+        padding: 36,
         padding: Math.round(28 * s),
         overflow: 'hidden',
       }}
@@ -194,6 +197,8 @@ export const IntroCard: React.FC<IntroCardProps> = ({
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'flex-start',
+          gap: 40,
+          marginBottom: 24,
           gap: Math.round(36 * s),
           marginBottom: Math.round(20 * s),
           width: '100%',
@@ -206,6 +211,8 @@ export const IntroCard: React.FC<IntroCardProps> = ({
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
+            gap: 10,
+            width: 180,
             gap: Math.round(10 * s),
             width: badgeContainerWidthPx,
           }}
@@ -215,6 +222,8 @@ export const IntroCard: React.FC<IntroCardProps> = ({
               src={effectiveHomeBadge}
               delayRenderTimeoutInMilliseconds={IMG_TIMEOUT_MS}
               style={{
+                width: 160,
+                height: 160,
                 width: badgeSizePx,
                 height: badgeSizePx,
                 objectFit: 'contain',
@@ -233,6 +242,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
           <span
             style={{
               fontFamily: 'system-ui, sans-serif',
+              fontSize: 18,
               fontSize: Math.round(16 * s),
               fontWeight: 700,
               color: 'rgba(255,255,255,0.92)',
@@ -263,6 +273,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
           <span
             style={{
               fontFamily: 'system-ui, sans-serif',
+              fontSize: 26,
               fontSize: Math.round(26 * s),
               fontWeight: 900,
               color: 'rgba(255,255,255,0.50)',
@@ -290,6 +301,8 @@ export const IntroCard: React.FC<IntroCardProps> = ({
                 src={effectiveAwayBadge}
                 delayRenderTimeoutInMilliseconds={IMG_TIMEOUT_MS}
                 style={{
+                  width: 160,
+                  height: 160,
                   width: badgeSizePx,
                   height: badgeSizePx,
                   objectFit: 'contain',
@@ -355,6 +368,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
         {score && (
           <span
             style={{
+              fontSize: 38,
               fontSize: Math.round(34 * s),
               fontWeight: 800,
               color: '#facc15',
