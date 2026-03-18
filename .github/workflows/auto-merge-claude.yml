@@ -1,0 +1,27 @@
+name: Auto-merge claude branch into feat/beta-deployment
+
+on:
+  push:
+    branches:
+      - 'claude/**'
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Merge claude branch into feat/beta-deployment
+        run: |
+          git checkout feat/beta-deployment
+          git pull origin feat/beta-deployment
+          git merge origin/${{ github.ref_name }} --no-edit -m "chore: auto-merge ${{ github.ref_name }} into feat/beta-deployment"
+          git push origin feat/beta-deployment
