@@ -1,3 +1,4 @@
+// v2 — scorer on separate yellow row
 import React from 'react';
 import { AbsoluteFill, useVideoConfig } from 'remotion';
 import type { ScoreboardOverlayData } from '../types/reel';

@@ -1,6 +1,7 @@
 name: Deploy Remotion Site
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - feat/beta-deployment
