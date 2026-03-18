@@ -89,14 +89,18 @@ export const IntroCard: React.FC<IntroCardProps> = ({
   backgroundColor = '#0a0a0f',
   durationFrames,
   fps: fpsProp = 30,
+  opponent: opponentProp,
+  score: scoreProp,
+  matchDate: matchDateProp,
+  ageGroup: ageGroupProp,
 }) => {
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
   // Scale relative to 1080p so the intro looks proportionally identical
   // across landscape (1920×1080), square (1080×1080) and vertical (1080×1920).
   const s = Math.min(width, height) / 1080;
-  const badgeSizePx = Math.round(200 * s);
-  const badgeContainerWidthPx = Math.round(220 * s);
+  const badgeSizePx = Math.round(280 * s);
+  const badgeContainerWidthPx = Math.round(300 * s);
 
   // ── Overall card fade-in/out ───────────────────────────────────────────────
   const cardOpacity = interpolate(
@@ -152,19 +156,30 @@ export const IntroCard: React.FC<IntroCardProps> = ({
   const effectiveAwayBadge = awayBadgeUrl || null;
   const hasBothBadges = Boolean(effectiveHomeBadge && effectiveAwayBadge);
 
-  // In dual-badge mode: title = home team name, subtitle = "AwayTeam · Score · Date · AgeGroup"
+  // In dual-badge mode: title = home team name.
+  // Prefer individual fields passed directly; fall back to parsing subtitle for
+  // backward compatibility with older renders that only set subtitle.
   const homeName = title;
   const subtitleParts = subtitle ? subtitle.split(' · ') : [];
-  const awayName = hasBothBadges ? subtitleParts[0] ?? '' : '';
-  const metaLine = hasBothBadges
-    ? subtitleParts.slice(1).join(' · ')
-    : subtitle ?? '';
+  const awayName = opponentProp ?? (hasBothBadges ? subtitleParts[0] ?? '' : '');
 
-  // Decompose metaLine: assume "Score · Date · AgeGroup" ordering
-  const metaParts = metaLine.split(' · ');
-  const score = metaParts[0] ?? '';
-  const matchDate = metaParts[1] ?? '';
-  const ageGroup = metaParts[2] ?? '';
+  let score: string;
+  let matchDate: string;
+  let ageGroup: string;
+
+  if (opponentProp !== undefined) {
+    // Individual fields provided — use them directly (no subtitle parsing)
+    score = scoreProp ?? '';
+    matchDate = matchDateProp ?? '';
+    ageGroup = ageGroupProp ?? '';
+  } else {
+    // Legacy: parse from subtitle string
+    const metaLine = hasBothBadges ? subtitleParts.slice(1).join(' · ') : subtitle ?? '';
+    const metaParts = metaLine.split(' · ');
+    score = metaParts[0] ?? '';
+    matchDate = metaParts[1] ?? '';
+    ageGroup = metaParts[2] ?? '';
+  }
 
   return (
     <AbsoluteFill
@@ -386,7 +401,15 @@ export const IntroCard: React.FC<IntroCardProps> = ({
           </span>
         )}
         {ageGroup && (
-          <span style={{ fontSize: Math.round(13 * s), color: 'rgba(255,255,255,0.32)' }}>
+          <span
+            style={{
+              fontSize: Math.round(11 * s),
+              fontWeight: 700,
+              letterSpacing: Math.round(4 * s),
+              textTransform: 'uppercase',
+              color: 'rgba(99,102,241,0.85)',
+            }}
+          >
             {ageGroup}
           </span>
         )}
@@ -397,7 +420,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
             letterSpacing: Math.round(4 * s),
             textTransform: 'uppercase',
             color: 'rgba(99,102,241,0.85)',
-            marginTop: Math.round(5 * s),
+            marginTop: Math.round(3 * s),
           }}
         >
           Match Highlights

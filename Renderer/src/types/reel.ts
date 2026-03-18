@@ -20,6 +20,14 @@ export type IntroCardData = {
   imageUrl?: string;
   /** Optional background color hex */
   backgroundColor?: string;
+  /** Away team / opponent name — preferred over parsing from subtitle */
+  opponent?: string;
+  /** Final score string e.g. "2 – 1" */
+  score?: string;
+  /** Match date string */
+  matchDate?: string;
+  /** Age group / competition label e.g. "U16 Girls" */
+  ageGroup?: string;
 };
 
 /** Role of a clip in the reel */
