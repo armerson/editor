@@ -27,3 +27,10 @@ jobs:
           git pull origin feat/beta-deployment
           git merge origin/${{ github.ref_name }} --no-edit -X theirs -m "chore: auto-merge ${{ github.ref_name }} into feat/beta-deployment"
           git push origin feat/beta-deployment
+
+      - name: Merge claude branch into main
+        run: |
+          git checkout main
+          git pull origin main
+          git merge origin/${{ github.ref_name }} --no-edit -X theirs -m "chore: auto-merge ${{ github.ref_name }} into main"
+          git push origin main
