@@ -83,7 +83,7 @@ const CumulativeScoreboard: React.FC<{
   clips: HighlightReelData['clips'];
   goals: GoalEvent[] | undefined;
   scoreboard: HighlightReelData['scoreboard'] | undefined;
-  /** Absolute frame at which the scoreboard becomes active (= intro duration in frames). */
+  // Absolute frame at which the scoreboard becomes active (= intro duration in frames).
   introDurationFrames: number;
 }> = ({ fps, clipStartFrames, clips, goals, scoreboard, introDurationFrames }) => {
   // CumulativeScoreboard is rendered without a parent Sequence so useCurrentFrame()
