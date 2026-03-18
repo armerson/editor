@@ -24,6 +24,7 @@ export interface RenderJobResponse {
 export interface HealthResponse {
   ok: boolean
   version: string
+  buildTime: string
   uptime: number       // seconds
   db: "sqlite"
   activeJobs: number
