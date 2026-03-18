@@ -32,6 +32,7 @@ if (!process.env.REMOTION_ROOT) {
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const PORT = Number(process.env.PORT ?? 3001)
+const BUILD_TIME = "2026-03-18T-v4"
 const rendersDir = process.env.RENDERS_DIR
   ? path.resolve(process.env.RENDERS_DIR)
   : path.resolve(process.cwd(), "renders")
@@ -88,6 +89,7 @@ function healthBody(): HealthResponse {
   return {
     ok: true,
     version: process.env.npm_package_version ?? "0.1.0",
+    buildTime: BUILD_TIME,
     uptime: Math.floor((Date.now() - SERVER_START) / 1000),
     db: "sqlite",
     activeJobs,
