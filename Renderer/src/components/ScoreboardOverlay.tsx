@@ -33,62 +33,64 @@ export const ScoreboardOverlay: React.FC<ScoreboardOverlayProps> = ({
         paddingLeft: Math.round(24 * s),
       }}
     >
-      <div
-        style={{
-          position: 'relative',
-          display: 'flex',
-          flexDirection: 'column',
-          padding: `${Math.round(10 * s)}px ${Math.round(22 * s)}px`,
-          backgroundColor: 'rgba(0,0,0,0.75)',
-          borderRadius: Math.round(8 * s),
-          fontFamily: 'system-ui, sans-serif',
-          color: '#fff',
-          fontSize: Math.round(26 * s),
-        }}
-      >
-        {/* Score row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: Math.round(16 * s) }}>
-          <span style={{ fontWeight: 600, minWidth: Math.round(120 * s), textAlign: 'right' }}>
-            {homeTeamName}
-          </span>
-          <span
-            style={{
-              fontSize: Math.round(34 * s),
-              fontWeight: 700,
-              minWidth: Math.round(72 * s),
-              textAlign: 'center',
-            }}
-          >
-            {homeScore} – {awayScore}
-          </span>
-          <span style={{ fontWeight: 600, minWidth: Math.round(120 * s), textAlign: 'left' }}>
-            {awayTeamName}
-          </span>
-          {clockOrPeriod ? (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: Math.round(6 * s) }}>
+        {/* Scoreboard box */}
+        <div
+          style={{
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            padding: `${Math.round(10 * s)}px ${Math.round(22 * s)}px`,
+            backgroundColor: 'rgba(0,0,0,0.75)',
+            borderRadius: Math.round(8 * s),
+            fontFamily: 'system-ui, sans-serif',
+            color: '#fff',
+            fontSize: Math.round(26 * s),
+          }}
+        >
+          {/* Score row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: Math.round(16 * s) }}>
+            <span style={{ fontWeight: 600, minWidth: Math.round(120 * s), textAlign: 'right' }}>
+              {homeTeamName}
+            </span>
             <span
               style={{
-                marginLeft: Math.round(16 * s),
-                paddingLeft: Math.round(16 * s),
-                borderLeft: '1px solid rgba(255,255,255,0.3)',
-                fontSize: Math.round(22 * s),
+                fontSize: Math.round(34 * s),
+                fontWeight: 700,
+                minWidth: Math.round(72 * s),
+                textAlign: 'center',
               }}
             >
-              {clockOrPeriod}
+              {homeScore} – {awayScore}
             </span>
-          ) : null}
-          {label ? (
-            <span style={{ opacity: 0.8, fontSize: Math.round(20 * s) }}>{label}</span>
-          ) : null}
+            <span style={{ fontWeight: 600, minWidth: Math.round(120 * s), textAlign: 'left' }}>
+              {awayTeamName}
+            </span>
+            {clockOrPeriod ? (
+              <span
+                style={{
+                  marginLeft: Math.round(16 * s),
+                  paddingLeft: Math.round(16 * s),
+                  borderLeft: '1px solid rgba(255,255,255,0.3)',
+                  fontSize: Math.round(22 * s),
+                }}
+              >
+                {clockOrPeriod}
+              </span>
+            ) : null}
+            {label ? (
+              <span style={{ opacity: 0.8, fontSize: Math.round(20 * s) }}>{label}</span>
+            ) : null}
+          </div>
         </div>
 
-        {/* Scorer — separate row below, yellow to match editor */}
+        {/* Scorer — below the scoreboard box */}
         {scorerName ? (
           <div
             style={{
-              marginTop: Math.round(6 * s),
-              paddingTop: Math.round(6 * s),
-              borderTop: '1px solid rgba(255,255,255,0.2)',
+              paddingLeft: Math.round(8 * s),
               fontSize: Math.round(22 * s),
+              fontFamily: 'system-ui, sans-serif',
               color: '#facc15',
               whiteSpace: 'nowrap',
             }}
