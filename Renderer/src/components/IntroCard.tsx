@@ -401,11 +401,8 @@ export const IntroCard: React.FC<IntroCardProps> = ({
         {ageGroup && (
           <span
             style={{
-              fontSize: Math.round(15 * s),
-              fontWeight: 700,
-              letterSpacing: Math.round(5 * s),
-              textTransform: 'uppercase',
-              color: 'rgba(99,102,241,0.85)',
+              fontSize: Math.round(12 * s),
+              color: 'rgba(255,255,255,0.35)',
             }}
           >
             {ageGroup}
