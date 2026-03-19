@@ -155,63 +155,15 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Adapt the editor's ProjectData shape to the Remotion HighlightReelData shape.
+ * Pass the editor's raw project JSON directly to Remotion as inputProps.
  *
- * The editor uses different field names for several concepts (legacy naming).
- * Remotion receives the mapped object as inputProps.
+ * The Remotion composition's calculateMetadata already calls
+ * projectJsonToHighlightReelData() internally — it expects the raw project
+ * shape (ProjectJson), not pre-adapted HighlightReelData. Adapting here would
+ * cause a double-conversion where all field names come out wrong.
  */
 function adaptProjectToInputProps(project: Project): Record<string, unknown> {
-  const { intro, scoreboard, music, clips, goals, presetId } = project
-
-  // ── Intro card ────────────────────────────────────────────────────────────
-  // Renderer uses `title` for the home team name; editor calls it `teamName`.
-  const adaptedIntro = {
-    title: intro.teamName,
-    subtitle: [intro.opponent, intro.score, intro.matchDate, intro.ageGroup]
-      .filter(Boolean)
-      .join(' · '),
-    opponent: intro.opponent || undefined,
-    score: intro.score || undefined,
-    matchDate: intro.matchDate || undefined,
-    ageGroup: intro.ageGroup || undefined,
-    homeBadgeUrl: intro.homeBadgeUrl || (intro as Record<string, unknown>).clubBadgeUrl as string | undefined || undefined,
-    awayBadgeUrl: intro.awayBadgeUrl || undefined,
-    durationSeconds: intro.durationSeconds,
-  }
-
-  // ── Scoreboard ────────────────────────────────────────────────────────────
-  // Renderer defaults visible to false; we always want it shown (per-clip
-  // showScoreboard flags still gate per-clip visibility).
-  const adaptedScoreboard = {
-    homeTeamName: scoreboard.homeTeamName,
-    awayTeamName: scoreboard.awayTeamName,
-    homeScore: scoreboard.homeScore,
-    awayScore: scoreboard.awayScore,
-    visible: true,
-  }
-
-  // ── Music ─────────────────────────────────────────────────────────────────
-  // Editor uses musicUrl/musicVolume/musicStartInReel etc.; renderer uses src/volume/startInReel etc.
-  const adaptedMusic = music.musicUrl
-    ? {
-        src: music.musicUrl,
-        volume: music.musicVolume,
-        startInReel: music.musicStartInReel,
-        trimStart: music.musicStartInTrack,
-        endInReel: music.musicEndInReel === "" ? undefined : music.musicEndInReel,
-        fadeOutDuration: music.fadeOutDuration,
-        clipAudioOn: music.clipAudioOn,
-      }
-    : undefined
-
-  return {
-    presetId,
-    intro: adaptedIntro,
-    clips,
-    goals,
-    scoreboard: adaptedScoreboard,
-    music: adaptedMusic,
-  }
+  return project as unknown as Record<string, unknown>
 }
 
 /** Log a pre-render summary of all clips to aid post-mortem debugging. */
