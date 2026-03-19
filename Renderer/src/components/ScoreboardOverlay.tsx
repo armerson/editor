@@ -45,25 +45,25 @@ export const ScoreboardOverlay: React.FC<ScoreboardOverlayProps> = ({
             borderRadius: Math.round(8 * s),
             fontFamily: 'system-ui, sans-serif',
             color: '#fff',
-            fontSize: Math.round(26 * s),
+            fontSize: Math.round(32 * s),
           }}
         >
           {/* Score row */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: Math.round(16 * s) }}>
-            <span style={{ fontWeight: 600, minWidth: Math.round(120 * s), textAlign: 'right' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: Math.round(20 * s) }}>
+            <span style={{ fontWeight: 600, minWidth: Math.round(148 * s), textAlign: 'right' }}>
               {homeTeamName}
             </span>
             <span
               style={{
-                fontSize: Math.round(34 * s),
+                fontSize: Math.round(42 * s),
                 fontWeight: 700,
-                minWidth: Math.round(72 * s),
+                minWidth: Math.round(88 * s),
                 textAlign: 'center',
               }}
             >
               {homeScore} – {awayScore}
             </span>
-            <span style={{ fontWeight: 600, minWidth: Math.round(120 * s), textAlign: 'left' }}>
+            <span style={{ fontWeight: 600, minWidth: Math.round(148 * s), textAlign: 'left' }}>
               {awayTeamName}
             </span>
           </div>
@@ -75,7 +75,7 @@ export const ScoreboardOverlay: React.FC<ScoreboardOverlayProps> = ({
                 marginTop: Math.round(6 * s),
                 paddingTop: Math.round(6 * s),
                 borderTop: '1px solid rgba(255,255,255,0.2)',
-                fontSize: Math.round(22 * s),
+                fontSize: Math.round(27 * s),
                 color: 'rgba(255,255,255,0.9)',
                 whiteSpace: 'nowrap',
               }}
@@ -91,7 +91,7 @@ export const ScoreboardOverlay: React.FC<ScoreboardOverlayProps> = ({
                 marginTop: Math.round(6 * s),
                 paddingTop: Math.round(6 * s),
                 borderTop: '1px solid rgba(255,255,255,0.2)',
-                fontSize: Math.round(22 * s),
+                fontSize: Math.round(27 * s),
                 fontFamily: 'system-ui, sans-serif',
                 color: '#facc15',
                 whiteSpace: 'nowrap',
