@@ -232,13 +232,54 @@ function buildGoalMarkers(
   })
 }
 
+// ── Intro duration handle ─────────────────────────────────────────────────────
+
+type IntroTrimHandleProps = {
+  introDurationSeconds: number
+  pxPerSec: number
+  onTrimIntro: (newDuration: number) => void
+}
+
+function IntroTrimHandle({ introDurationSeconds, pxPerSec, onTrimIntro }: IntroTrimHandleProps) {
+  const dragRef = useRef<{ startX: number; startDuration: number } | null>(null)
+
+  return (
+    <div
+      className="absolute top-0 bottom-0 right-0 z-20 flex w-2.5 items-center justify-center cursor-ew-resize"
+      onPointerDown={(e) => {
+        e.stopPropagation()
+        e.currentTarget.setPointerCapture(e.pointerId)
+        dragRef.current = { startX: e.clientX, startDuration: introDurationSeconds }
+      }}
+      onPointerMove={(e) => {
+        if (!dragRef.current) return
+        const dSec = (e.clientX - dragRef.current.startX) / pxPerSec
+        const clamped = Math.max(1, Math.min(10, dragRef.current.startDuration + dSec))
+        onTrimIntro(clamped)
+      }}
+      onPointerUp={(e) => {
+        dragRef.current = null
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="h-full w-0.5 rounded-full bg-yellow-400/80" />
+    </div>
+  )
+}
+
+// ── Timeline track props ──────────────────────────────────────────────────────
+
 type Props = {
   clips: Clip[]
   goals: GoalEvent[]
   selectedClipId: string | null
+  introSelected: boolean
   currentReelTime: number
   introDurationSeconds: number
   onSelectClip: (id: string) => void
+  onSelectIntro: () => void
+  onTrimIntro: (newDuration: number) => void
   onReorder: (from: number, to: number) => void
   onTrimClip: (clipId: string, trimStart: number, trimEnd: number) => void
   /** If provided, clicking the timeline background at a time position opens the
@@ -254,9 +295,12 @@ export function TimelineTrack({
   clips,
   goals,
   selectedClipId,
+  introSelected,
   currentReelTime,
   introDurationSeconds,
   onSelectClip,
+  onSelectIntro,
+  onTrimIntro,
   onReorder,
   onTrimClip,
   onAddGoalAtReelTime,
@@ -358,14 +402,30 @@ export function TimelineTrack({
         {/* Segments row */}
         <div className="relative flex gap-px">
           {/* Intro block */}
-          <div
-            className="flex shrink-0 items-center justify-center rounded-lg border border-blue-800 bg-blue-950/60 text-[10px] font-medium text-blue-400"
-            style={{
-              width: Math.max(32, (introDuration / totalReelDuration) * timelineWidthPx),
-            }}
-          >
-            Intro {introDuration}s
-          </div>
+          {introDuration > 0 && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onSelectIntro() }}
+              className={`group relative flex shrink-0 flex-col overflow-hidden rounded-lg border transition-colors ${
+                introSelected
+                  ? "border-yellow-500 ring-1 ring-yellow-500/40"
+                  : "border-blue-800 hover:border-blue-600"
+              } bg-blue-950/60`}
+              style={{ width: Math.max(32, (introDuration / totalReelDuration) * timelineWidthPx) }}
+            >
+              <div className="flex h-8 w-full items-center justify-center bg-blue-900/30">
+                <span className="text-[10px] font-bold tracking-wide text-blue-300">INTRO</span>
+              </div>
+              <div className="flex items-center justify-center px-1.5 py-1">
+                <span className="text-[10px] tabular-nums text-blue-400">{introDuration.toFixed(1)}s</span>
+              </div>
+              <IntroTrimHandle
+                introDurationSeconds={introDuration}
+                pxPerSec={pxPerSec}
+                onTrimIntro={onTrimIntro}
+              />
+            </button>
+          )}
 
           {/* Sortable clips */}
           <DndContext

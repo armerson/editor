@@ -63,7 +63,7 @@ const DEFAULT_INTRO: IntroData = {
   ageGroup: "",
   homeBadgeUrl: "",
   awayBadgeUrl: "",
-  durationSeconds: 2,
+  durationSeconds: 3,
 }
 
 const ASPECT_RATIO_CLASS: Record<AspectRatioPreset, string> = {
@@ -75,6 +75,7 @@ const ASPECT_RATIO_CLASS: Record<AspectRatioPreset, string> = {
 export default function App() {
   const [clips, setClips] = useState<Clip[]>([])
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null)
+  const [introSelected, setIntroSelected] = useState(false)
   const [isPlayingReel, setIsPlayingReel] = useState(false)
   const [showIntroCard, setShowIntroCard] = useState(false)
   const [introEnabled, setIntroEnabled] = useState(true)
@@ -495,7 +496,15 @@ export default function App() {
   }
 
   const handleSelectClip = (id: string) => {
-    setIsPlayingReel(false); setShowIntroCard(false); setSelectedClipId(id); audioRef.current?.pause()
+    setIsPlayingReel(false); setShowIntroCard(false); setSelectedClipId(id); setIntroSelected(false); audioRef.current?.pause()
+  }
+
+  const handleSelectIntro = () => {
+    setIsPlayingReel(false); setShowIntroCard(false); setSelectedClipId(null); setIntroSelected(true); audioRef.current?.pause()
+  }
+
+  const updateIntroDuration = (newDuration: number) => {
+    setIntro((p) => ({ ...p, durationSeconds: Math.max(1, Math.min(10, newDuration)) }))
   }
 
   const handleReorderClips = (from: number, to: number) =>
@@ -1234,10 +1243,31 @@ export default function App() {
                 </p>
               </div>
               <TimelineTrack clips={clips} goals={goals} selectedClipId={selectedClipId}
+                introSelected={introSelected}
                 currentReelTime={currentReelTime} introDurationSeconds={effectiveIntroDuration}
-                onSelectClip={handleSelectClip} onReorder={handleReorderClips}
+                onSelectClip={handleSelectClip} onSelectIntro={handleSelectIntro}
+                onTrimIntro={updateIntroDuration}
+                onReorder={handleReorderClips}
                 onTrimClip={updateClipTrim} onAddGoalAtReelTime={handleAddGoalAtReelTime} />
             </div>
+
+            {/* Intro settings panel */}
+            {introSelected && introEnabled && (
+              <div className="mx-auto mt-4 w-full max-w-2xl rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+                <div className="flex items-center gap-3">
+                  <h3 className="text-sm font-semibold text-neutral-200">Intro Card</h3>
+                  <span className="rounded-md bg-neutral-800 px-2 py-0.5 text-xs text-neutral-400">{intro.durationSeconds.toFixed(1)}s</span>
+                </div>
+                <div className="mt-3 flex items-center gap-3">
+                  <label className="text-xs text-neutral-400" htmlFor="intro-duration-panel">Duration</label>
+                  <input id="intro-duration-panel" type="number" min={1} max={10} step={0.5}
+                    value={intro.durationSeconds}
+                    onChange={(e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) updateIntroDuration(v) }}
+                    className="w-20 rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1 text-xs text-neutral-200 [appearance:textfield]" />
+                  <span className="text-xs text-neutral-500">seconds · drag the right edge on the timeline to resize</span>
+                </div>
+              </div>
+            )}
 
             {/* Clip settings */}
             {selectedClip && (
