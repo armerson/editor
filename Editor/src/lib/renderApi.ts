@@ -26,13 +26,12 @@ function normaliseBase(raw: string): string {
 }
 const API_BASE = normaliseBase(import.meta.env.VITE_RENDER_API_BASE ?? "http://localhost:3001")
 
-/** Return headers including the beta token when one is stored. */
+/** Return auth headers — JWT for login users, X-Beta-Token for bypass users. */
 function apiHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  const token = localStorage.getItem("beta_token") ?? import.meta.env.VITE_BETA_TOKEN ?? ""
-  return {
-    ...(token ? { "X-Beta-Token": token } : {}),
-    ...extra,
-  }
+  const jwt = localStorage.getItem("auth_jwt")
+  if (jwt) return { "Authorization": `Bearer ${jwt}`, ...extra }
+  const bypass = localStorage.getItem("beta_token") ?? (import.meta.env.VITE_BETA_TOKEN as string | undefined) ?? ""
+  return { ...(bypass ? { "X-Beta-Token": bypass } : {}), ...extra }
 }
 
 export async function startRender(project: ProjectData): Promise<StartRenderResponse> {

@@ -38,3 +38,8 @@ export interface ErrorResponse {
   error: string
   errors?: string[]
 }
+
+/** POST /api/auth/login → 200 */
+export interface LoginResponse {
+  token: string
+}

@@ -1,4 +1,5 @@
 import "dotenv/config"
+import crypto from "node:crypto"
 import path from "node:path"
 import express from "express"
 import cors from "cors"
@@ -19,6 +20,7 @@ import type {
   RenderJobResponse,
   HealthResponse,
   ErrorResponse,
+  LoginResponse,
 } from "./types"
 
 // ── Startup guard ─────────────────────────────────────────────────────────────
@@ -37,8 +39,53 @@ const rendersDir = process.env.RENDERS_DIR
   ? path.resolve(process.env.RENDERS_DIR)
   : path.resolve(process.cwd(), "renders")
 
-// Beta token — if set, all /api/* requests must include X-Beta-Token header.
+// Auth config
+// BETA_TOKEN — acts as a bypass token (X-Beta-Token header or ?bypass= URL param)
 const BETA_TOKEN = process.env.BETA_TOKEN || null
+// JWT_SECRET — signs tokens issued by POST /api/auth/login
+const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-in-prod"
+// USERS — comma-separated list of email:password pairs, e.g. "alice@test.com:pass1,bob@test.com:pass2"
+const USERS_RAW = process.env.USERS || ""
+
+// ── Auth helpers ─────────────────────────────────────────────────────────────
+
+/** Parse USERS env var into a list of {email, password} objects. */
+function parseUsers(): Array<{ email: string; password: string }> {
+  if (!USERS_RAW) return []
+  return USERS_RAW.split(",").flatMap(pair => {
+    const colonIdx = pair.indexOf(":")
+    if (colonIdx < 1) return []
+    return [{ email: pair.slice(0, colonIdx).trim().toLowerCase(), password: pair.slice(colonIdx + 1).trim() }]
+  })
+}
+
+/** Sign a simple HS256 JWT using Node's built-in crypto (no extra deps). */
+function signJwt(payload: Record<string, unknown>, expirySeconds = 7 * 86_400): string {
+  const header = Buffer.from('{"alg":"HS256","typ":"JWT"}').toString("base64url")
+  const body = Buffer.from(JSON.stringify({
+    ...payload,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + expirySeconds,
+  })).toString("base64url")
+  const sig = crypto.createHmac("sha256", JWT_SECRET).update(`${header}.${body}`).digest("base64url")
+  return `${header}.${body}.${sig}`
+}
+
+/** Verify an HS256 JWT. Returns the decoded payload or null if invalid/expired. */
+function verifyJwt(token: string): Record<string, unknown> | null {
+  try {
+    const [header, body, sig] = token.split(".")
+    if (!header || !body || !sig) return null
+    const expected = crypto.createHmac("sha256", JWT_SECRET).update(`${header}.${body}`).digest("base64url")
+    // Constant-time comparison to prevent timing attacks
+    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null
+    const payload = JSON.parse(Buffer.from(body, "base64url").toString()) as Record<string, unknown>
+    if (typeof payload.exp === "number" && Math.floor(Date.now() / 1000) > payload.exp) return null
+    return payload
+  } catch {
+    return null
+  }
+}
 
 // ── Recover interrupted jobs from a previous run ──────────────────────────────
 try {
@@ -59,8 +106,8 @@ const app = express()
 const corsOrigin = process.env.CORS_ORIGIN ?? "*"
 const corsOptions: cors.CorsOptions = {
   origin: corsOrigin,
-  // Explicitly allow the custom auth header so the browser preflight passes.
-  allowedHeaders: ["Content-Type", "X-Beta-Token"],
+  // Explicitly allow auth headers so the browser preflight passes.
+  allowedHeaders: ["Content-Type", "X-Beta-Token", "Authorization"],
   methods: ["GET", "POST", "OPTIONS"],
 }
 // Must handle OPTIONS before any auth middleware — cors() alone doesn't
@@ -108,21 +155,57 @@ app.get("/healthz", (_req, res) => {
   res.json(healthBody())
 })
 
-// ── Beta token guard (protects all /api/* routes) ─────────────────────────────
-if (BETA_TOKEN) {
+// ── POST /api/auth/login ──────────────────────────────────────────────────────
+// Public — must be registered BEFORE the auth guard middleware.
+app.post("/api/auth/login", (req, res) => {
+  const { email, password } = (req.body ?? {}) as { email?: unknown; password?: unknown }
+  if (typeof email !== "string" || typeof password !== "string" || !email || !password) {
+    res.status(400).json({ error: "email and password are required" } as ErrorResponse)
+    return
+  }
+  const users = parseUsers()
+  if (users.length === 0) {
+    // No USERS configured — login endpoint unavailable; use bypass token.
+    res.status(503).json({ error: "Login not configured. Use your bypass token." } as ErrorResponse)
+    return
+  }
+  const user = users.find(u => u.email === email.trim().toLowerCase() && u.password === password)
+  if (!user) {
+    logger.warn({ email }, "failed login attempt")
+    res.status(401).json({ error: "Invalid email or password" } as ErrorResponse)
+    return
+  }
+  const token = signJwt({ email: user.email })
+  logger.info({ email: user.email }, "user logged in")
+  const body: LoginResponse = { token }
+  res.json(body)
+})
+
+// ── Auth guard (protects all /api/* routes except /api/auth/*) ────────────────
+const authEnabled = Boolean(BETA_TOKEN || USERS_RAW)
+if (authEnabled) {
   app.use("/api", (req, res, next) => {
-    // Always let CORS preflight through — auth headers aren't sent on OPTIONS.
+    // Always let CORS preflight through.
     if (req.method === "OPTIONS") { next(); return }
-    const token = req.headers["x-beta-token"]
-    if (token !== BETA_TOKEN) {
-      logger.warn({ url: req.url }, "rejected request: missing or invalid beta token")
-      const body: ErrorResponse = { error: "Unauthorized" }
-      res.status(401).json(body)
-      return
+    // /api/auth/* is public (login endpoint handled above).
+    if (req.path.startsWith("/auth/")) { next(); return }
+
+    // 1. Accept JWT issued by /api/auth/login (Authorization: Bearer <token>)
+    const authHeader = req.headers["authorization"]
+    if (authHeader?.startsWith("Bearer ")) {
+      const payload = verifyJwt(authHeader.slice(7))
+      if (payload) { next(); return }
     }
-    next()
+
+    // 2. Accept bypass token (X-Beta-Token header — set by ?bypass= URL param on frontend)
+    if (BETA_TOKEN && req.headers["x-beta-token"] === BETA_TOKEN) {
+      next(); return
+    }
+
+    logger.warn({ url: req.url }, "rejected request: missing or invalid auth")
+    res.status(401).json({ error: "Unauthorized" } as ErrorResponse)
   })
-  logger.info("beta token guard enabled")
+  logger.info({ hasUsers: Boolean(USERS_RAW), hasBypass: Boolean(BETA_TOKEN) }, "auth guard enabled")
 }
 
 // ── POST /api/render ──────────────────────────────────────────────────────────
