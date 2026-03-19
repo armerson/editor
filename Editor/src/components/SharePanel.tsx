@@ -4,7 +4,8 @@ type Platform = {
   id: string
   label: string
   charLimit: number | null
-  webShare: boolean
+  /** Has a web intent URL fallback for desktop */
+  hasWebIntent: boolean
   color: string
   icon: React.ReactNode
 }
@@ -14,7 +15,7 @@ const PLATFORMS: Platform[] = [
     id: "x",
     label: "X",
     charLimit: 280,
-    webShare: true,
+    hasWebIntent: true,
     color: "#000",
     icon: (
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
@@ -26,7 +27,7 @@ const PLATFORMS: Platform[] = [
     id: "facebook",
     label: "Facebook",
     charLimit: null,
-    webShare: true,
+    hasWebIntent: true,
     color: "#1877F2",
     icon: (
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
@@ -38,7 +39,7 @@ const PLATFORMS: Platform[] = [
     id: "instagram",
     label: "Instagram",
     charLimit: 2200,
-    webShare: false,
+    hasWebIntent: false,
     color: "#E1306C",
     icon: (
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
@@ -50,7 +51,7 @@ const PLATFORMS: Platform[] = [
     id: "tiktok",
     label: "TikTok",
     charLimit: 2200,
-    webShare: false,
+    hasWebIntent: false,
     color: "#010101",
     icon: (
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
@@ -62,7 +63,7 @@ const PLATFORMS: Platform[] = [
     id: "linkedin",
     label: "LinkedIn",
     charLimit: 3000,
-    webShare: true,
+    hasWebIntent: true,
     color: "#0A66C2",
     icon: (
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
@@ -74,7 +75,7 @@ const PLATFORMS: Platform[] = [
     id: "whatsapp",
     label: "WhatsApp",
     charLimit: null,
-    webShare: true,
+    hasWebIntent: true,
     color: "#25D366",
     icon: (
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
@@ -84,7 +85,8 @@ const PLATFORMS: Platform[] = [
   },
 ]
 
-function getShareUrl(platformId: string, caption: string, videoUrl: string): string {
+/** Returns a web-intent URL for text-capable platforms, empty string otherwise. */
+function getWebIntentUrl(platformId: string, caption: string, videoUrl: string): string {
   const text = encodeURIComponent(caption)
   const url = encodeURIComponent(videoUrl)
   switch (platformId) {
@@ -101,26 +103,101 @@ function getShareUrl(platformId: string, caption: string, videoUrl: string): str
   }
 }
 
-type Props = {
-  downloadUrl: string
-  defaultCaption?: string
-  onDownload: () => void
-  downloading: boolean
+/** Fetch the video as a blob and trigger a browser download. */
+async function fetchAndDownload(downloadUrl: string, fileName: string): Promise<void> {
+  const res = await fetch(downloadUrl)
+  const blob = await res.blob()
+  triggerBlobDownload(blob, fileName)
 }
 
-export function SharePanel({ downloadUrl, defaultCaption = "", onDownload, downloading }: Props) {
+function triggerBlobDownload(blob: Blob, fileName: string) {
+  const objectUrl = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = objectUrl
+  a.download = `${fileName}.mp4`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  // Delay revoke so the browser has time to start the download
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000)
+}
+
+type Props = {
+  downloadUrl: string
+  fileName: string
+  defaultCaption?: string
+}
+
+export function SharePanel({ downloadUrl, fileName, defaultCaption = "" }: Props) {
   const [open, setOpen] = useState(false)
   const [selectedId, setSelectedId] = useState("x")
   const [caption, setCaption] = useState(defaultCaption)
   const [copied, setCopied] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+  const [sharing, setSharing] = useState(false)
+  const [shareError, setShareError] = useState<string | null>(null)
 
   const platform = PLATFORMS.find((p) => p.id === selectedId)!
   const charCount = caption.length
   const overLimit = platform.charLimit !== null && charCount > platform.charLimit
 
-  function handleShare() {
-    const shareUrl = getShareUrl(platform.id, caption, downloadUrl)
-    window.open(shareUrl, "_blank", "noopener,noreferrer,width=600,height=500")
+  async function handleDownload() {
+    setDownloading(true)
+    try {
+      await fetchAndDownload(downloadUrl, fileName)
+    } catch {
+      // CORS or fetch failed — open in new tab as last resort
+      window.open(downloadUrl, "_blank", "noopener,noreferrer")
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  /**
+   * Share the actual video file using the Web Share API (opens the native OS
+   * share sheet on mobile, letting users pick Instagram, TikTok, etc.).
+   *
+   * Desktop fallback: for platforms that have a web intent URL we open a
+   * compose window with the caption pre-filled and also download the video so
+   * the user can attach it manually. For app-only platforms (Instagram, TikTok)
+   * without native share support we just download the file.
+   */
+  async function handleShare() {
+    setSharing(true)
+    setShareError(null)
+    try {
+      const res = await fetch(downloadUrl)
+      const blob = await res.blob()
+      const file = new File([blob], `${fileName}.mp4`, { type: "video/mp4" })
+
+      if (navigator.canShare?.({ files: [file] })) {
+        // Native share sheet — attaches the real video file
+        await navigator.share({ files: [file], title: fileName, text: caption })
+      } else {
+        // Desktop / browser without file-share support
+        const intentUrl = getWebIntentUrl(platform.id, caption, downloadUrl)
+        if (intentUrl) {
+          // Open compose window with caption; download video so user can attach it
+          window.open(intentUrl, "_blank", "noopener,noreferrer,width=600,height=500")
+          triggerBlobDownload(blob, fileName)
+          setShareError(
+            `Your browser can't attach the video automatically. We've downloaded it — upload it inside ${platform.label} when the compose window opens.`
+          )
+        } else {
+          // App-only platform on desktop — just download
+          triggerBlobDownload(blob, fileName)
+          setShareError(
+            `${platform.label} doesn't support web sharing. The video has been downloaded — open ${platform.label} on your phone and create a new post.`
+          )
+        }
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name !== "AbortError") {
+        setShareError("Couldn't share the video. Try downloading it instead.")
+      }
+    } finally {
+      setSharing(false)
+    }
   }
 
   async function handleCopyCaption() {
@@ -134,7 +211,7 @@ export function SharePanel({ downloadUrl, defaultCaption = "", onDownload, downl
       {/* Download button */}
       <button
         type="button"
-        onClick={onDownload}
+        onClick={handleDownload}
         disabled={downloading}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-black hover:bg-emerald-400 disabled:cursor-wait disabled:opacity-60"
       >
@@ -147,7 +224,7 @@ export function SharePanel({ downloadUrl, defaultCaption = "", onDownload, downl
       {/* Share toggle */}
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => { setOpen((v) => !v); setShareError(null) }}
         className="flex w-full items-center justify-center gap-2 rounded-lg border border-neutral-600 bg-neutral-800 px-4 py-2.5 text-sm font-medium text-neutral-200 hover:bg-neutral-700"
       >
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -165,7 +242,7 @@ export function SharePanel({ downloadUrl, defaultCaption = "", onDownload, downl
               <button
                 key={p.id}
                 type="button"
-                onClick={() => setSelectedId(p.id)}
+                onClick={() => { setSelectedId(p.id); setShareError(null) }}
                 className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
                   selectedId === p.id
                     ? "border-transparent text-white"
@@ -198,13 +275,10 @@ export function SharePanel({ downloadUrl, defaultCaption = "", onDownload, downl
             />
           </div>
 
-          {/* App-only platforms: instructions */}
-          {!platform.webShare && (
-            <div className="rounded-lg border border-amber-600/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-300 space-y-1">
-              <p className="font-semibold">{platform.label} requires the mobile app to post video.</p>
-              <p>1. Download the MP4 to your device.</p>
-              <p>2. Copy your caption below.</p>
-              <p>3. Open {platform.label} and create a new post.</p>
+          {/* Share error / info */}
+          {shareError && (
+            <div className="rounded-lg border border-amber-600/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-300">
+              {shareError}
             </div>
           )}
 
@@ -232,32 +306,28 @@ export function SharePanel({ downloadUrl, defaultCaption = "", onDownload, downl
               )}
             </button>
 
-            {platform.webShare && (
-              <button
-                type="button"
-                onClick={handleShare}
-                disabled={overLimit}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
-                style={{ backgroundColor: platform.color }}
-              >
-                {platform.icon}
-                Post to {platform.label}
-              </button>
-            )}
-
-            {!platform.webShare && (
-              <button
-                type="button"
-                onClick={onDownload}
-                disabled={downloading}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-neutral-700 px-3 py-2 text-xs font-semibold text-white hover:bg-neutral-600 disabled:cursor-wait disabled:opacity-60"
-              >
-                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 4v11" />
-                </svg>
-                {downloading ? "Downloading…" : "Download for " + platform.label}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handleShare}
+              disabled={overLimit || sharing}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+              style={{ backgroundColor: platform.color }}
+            >
+              {sharing ? (
+                <>
+                  <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
+                  </svg>
+                  Preparing…
+                </>
+              ) : (
+                <>
+                  {platform.icon}
+                  Share to {platform.label}
+                </>
+              )}
+            </button>
           </div>
         </div>
       )}

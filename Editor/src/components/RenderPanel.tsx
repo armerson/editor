@@ -1,4 +1,3 @@
-import { useState } from "react"
 import type { RenderState } from "../types"
 import { SharePanel } from "./SharePanel"
 
@@ -19,24 +18,6 @@ const STATUS_LABEL: Record<string, string> = {
 
 export function RenderPanel({ renderState, onReset, fileName = "highlight", defaultCaption }: Props) {
   const { status, progress, downloadUrl, error } = renderState
-  const [downloading, setDownloading] = useState(false)
-
-  async function handleDownload() {
-    if (!downloadUrl) return
-    setDownloading(true)
-    try {
-      const res = await fetch(downloadUrl)
-      const blob = await res.blob()
-      const objectUrl = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = objectUrl
-      a.download = `${fileName}.mp4`
-      a.click()
-      URL.revokeObjectURL(objectUrl)
-    } finally {
-      setDownloading(false)
-    }
-  }
 
   if (status === "idle") return null
 
@@ -140,9 +121,8 @@ export function RenderPanel({ renderState, onReset, fileName = "highlight", defa
           />
           <SharePanel
             downloadUrl={downloadUrl}
+            fileName={fileName}
             defaultCaption={defaultCaption}
-            onDownload={handleDownload}
-            downloading={downloading}
           />
         </div>
       )}
