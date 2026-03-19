@@ -101,6 +101,7 @@ export default function App() {
   const [projectTitle, setProjectTitle] = useState("Untitled Project")
   const [saveLoadStatus, setSaveLoadStatus] = useState<string | null>(null)
   const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "pending" | null>(null)
+  const [draftBanner, setDraftBanner] = useState<"visible" | "dismissed" | null>(null)
   const [aspectRatio, setAspectRatio] = useState<AspectRatioPreset>("landscape")
   const [renderState, setRenderState] = useState<RenderState>({
     status: "idle",
@@ -284,6 +285,44 @@ export default function App() {
       toast("Project loaded")
     } catch { toast("Load failed") }
   }
+
+  const handleRestoreDraft = () => {
+    try {
+      const raw = localStorage.getItem(DRAFT_STORAGE_KEY)
+      if (!raw) return
+      const project = JSON.parse(raw) as ProjectData
+      if (!project?.version || !Array.isArray(project.clips)) return
+      applyProjectToState(project)
+      setDraftBanner("dismissed")
+      toast("Draft restored")
+    } catch { setDraftBanner("dismissed") }
+  }
+
+  // On mount: show restore banner if a non-empty draft exists
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_STORAGE_KEY)
+      if (!raw) return
+      const project = JSON.parse(raw) as ProjectData
+      if (project?.version && Array.isArray(project.clips) && project.clips.length > 0) {
+        setDraftBanner("visible")
+      }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Ctrl+S — quick save
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault()
+        handleSaveProject()
+      }
+    }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleExportProject = () => {
     const project = buildProjectSnapshot()
@@ -900,6 +939,31 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {/* Draft restore banner */}
+      {draftBanner === "visible" && (
+        <div className="flex shrink-0 items-center justify-between gap-4 border-b border-yellow-600/30 bg-yellow-500/10 px-6 py-2.5">
+          <span className="text-sm text-yellow-300">
+            You have an unsaved draft from your last session.
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleRestoreDraft}
+              className="rounded-lg bg-yellow-500 px-3 py-1 text-xs font-semibold text-black hover:bg-yellow-400"
+            >
+              Restore Draft
+            </button>
+            <button
+              type="button"
+              onClick={() => setDraftBanner("dismissed")}
+              className="rounded-lg border border-neutral-700 px-3 py-1 text-xs text-neutral-400 hover:bg-neutral-800"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Body */}
       <main className="flex min-h-0 flex-1 overflow-hidden">
