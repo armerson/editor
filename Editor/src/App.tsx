@@ -1306,6 +1306,7 @@ export default function App() {
             {/* Render panel */}
             <div className="mx-auto mt-4 w-full max-w-2xl">
               <RenderPanel renderState={renderState}
+                fileName={projectTitle.trim().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-") || "highlight"}
                 onReset={() => setRenderState({ status: "idle", jobId: null, progress: 0, downloadUrl: null, error: null })} />
             </div>
           </div>
