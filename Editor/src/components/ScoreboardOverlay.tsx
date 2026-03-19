@@ -75,8 +75,13 @@ export function ScoreboardOverlay({
       )}
 
       {showScorerAfterGoal && activeScorerGoal && (
-        <div className="mt-1 border-t border-white/20 pt-1 text-xs text-yellow-400/95">
-          ⚽ {activeScorerGoal.scorerName}
+        <div className="mt-1 flex items-center justify-between gap-4 border-t border-white/20 pt-1 text-xs text-yellow-400/95">
+          <span className="truncate">
+            {activeScorerGoal.side === "home" ? `⚽ ${activeScorerGoal.scorerName}` : ""}
+          </span>
+          <span className="truncate text-right">
+            {activeScorerGoal.side === "away" ? `⚽ ${activeScorerGoal.scorerName}` : ""}
+          </span>
         </div>
       )}
     </div>

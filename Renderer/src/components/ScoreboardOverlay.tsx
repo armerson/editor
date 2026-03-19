@@ -84,10 +84,13 @@ export const ScoreboardOverlay: React.FC<ScoreboardOverlayProps> = ({
             </div>
           ) : null}
 
-          {/* Scorer row — inside the box, below the score row, matching editor layout */}
+          {/* Scorer row — aligned under the team that scored */}
           {scorerName ? (
             <div
               style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: Math.round(24 * s),
                 marginTop: Math.round(7 * s),
                 paddingTop: Math.round(7 * s),
                 borderTop: '1px solid rgba(255,255,255,0.2)',
@@ -97,7 +100,13 @@ export const ScoreboardOverlay: React.FC<ScoreboardOverlayProps> = ({
                 whiteSpace: 'nowrap',
               }}
             >
-              ⚽ {scorerName}
+              <span style={{ minWidth: Math.round(200 * s), textAlign: 'right' }}>
+                {scorerSide === 'home' ? `⚽ ${scorerName}` : ''}
+              </span>
+              <span style={{ minWidth: Math.round(110 * s) }} />
+              <span style={{ minWidth: Math.round(200 * s), textAlign: 'left' }}>
+                {scorerSide === 'away' ? `⚽ ${scorerName}` : ''}
+              </span>
             </div>
           ) : null}
         </div>

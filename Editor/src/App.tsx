@@ -209,7 +209,7 @@ export default function App() {
         musicEndInReel,
         fadeOutDuration,
         clipAudioOn,
-        ...(musicTrack?.url?.startsWith("http") ? { musicUrl: musicTrack.url } : {}),
+        ...(musicTrack?.url?.startsWith("http") ? { musicUrl: unwrapProxyUrl(musicTrack.url) } : {}),
       },
       transitions: clips.map(() => ({ type: "cut", durationSeconds: 0 })),
     }
@@ -257,7 +257,19 @@ export default function App() {
     setScoreboard(project.scoreboard)
     setGoals(project.goals)
     const musicUrl = project.music.musicUrl
-    setMusicTrack(musicUrl ? { name: project.music.musicFileName || "Track", url: musicUrl } : null)
+    if (musicUrl) {
+      setMusicTrack({ name: project.music.musicFileName || "Track", url: musicUrl })
+    } else {
+      // No HTTP URL saved (blob-URL session or pre-Firebase project).
+      // Try to recover the file from IndexedDB so the editor can preview it.
+      const musicFile = await idbGet("__music__").catch(() => undefined)
+      const musicFileName = project.music.musicFileName
+      if (musicFile && musicFileName && musicFile.name === musicFileName) {
+        setMusicTrack({ name: musicFileName, url: URL.createObjectURL(musicFile) })
+      } else {
+        setMusicTrack(null)
+      }
+    }
     setMusicVolume(project.music.musicVolume)
     setMusicStartInReel(project.music.musicStartInReel)
     setMusicStartInTrack(project.music.musicStartInTrack)
@@ -595,10 +607,14 @@ export default function App() {
 
   const handleMusicUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return
+    // Persist raw file to IDB immediately so preview survives session restore
+    idbSave("__music__", file).catch(console.error)
     if (isFirebaseConfigured()) {
       try {
         const url = await uploadMediaToStorage("music", file, crypto.randomUUID())
         setMusicTrack((prev) => { revokeIfBlobUrl(prev?.url); return { name: file.name, url } })
+        // Firebase URL is now the source of truth; IDB copy no longer needed
+        idbDelete("__music__").catch(console.error)
         toast("Music uploaded")
       } catch {
         const url = URL.createObjectURL(file)
@@ -1363,7 +1379,7 @@ export default function App() {
                   {musicTrack ? "Change track" : "Upload music"}
                 </button>
                 {musicTrack && (
-                  <button type="button" onClick={() => { revokeIfBlobUrl(musicTrack.url); setMusicTrack(null) }}
+                  <button type="button" onClick={() => { revokeIfBlobUrl(musicTrack.url); setMusicTrack(null); idbDelete("__music__").catch(console.error) }}
                     className="text-xs text-neutral-500 hover:text-red-400">Remove</button>
                 )}
               </div>
