@@ -21,6 +21,7 @@ function unwrapProxyUrl(url: string): string {
 }
 import type { ChangeEvent } from "react"
 import { isFirebaseConfigured, uploadMediaToStorage } from "./firebase"
+import { idbSave, idbGet, idbDelete } from "./idb"
 import { validateProjectForExport } from "./lib/validateProject"
 import { getRenderStatus, startRender } from "./lib/renderApi"
 import type {
@@ -187,7 +188,8 @@ export default function App() {
         role: c.role ?? "normal",
         muteAudio: c.muteAudio ?? false,
         ...(c.url.startsWith("http") ? { src: unwrapProxyUrl(c.url) } : {}),
-        ...(c.thumbnail.startsWith("http") ? { thumbnail: c.thumbnail } : {}),
+        // Always persist thumbnails (data URLs are small; needed in sidebar after restore)
+        ...(c.thumbnail ? { thumbnail: c.thumbnail } : {}),
       })),
       intro: {
         ...intro,
@@ -213,15 +215,33 @@ export default function App() {
     }
   }
 
-  function applyProjectToState(project: ProjectData) {
+  async function applyProjectToState(project: ProjectData) {
     setProjectTitle(project.projectTitle)
     setAspectRatio((project.presetId as AspectRatioPreset | undefined) ?? "landscape")
     // durationSeconds === 0 means intro was disabled when the project was saved.
     setIntroEnabled((project.intro.durationSeconds ?? 1) > 0)
+
+    // For clips that have no HTTP src (e.g. Firebase not configured, or saved
+    // before upload finished), try to recover a preview from IndexedDB where
+    // the original File was stored at upload time.
+    const blobUrls = new Map<string, string>()
+    await Promise.all(
+      project.clips
+        .filter((c) => !c.src)
+        .map(async (c) => {
+          try {
+            const file = await idbGet(c.id)
+            if (file) blobUrls.set(c.id, URL.createObjectURL(file))
+          } catch {
+            // IDB unavailable or entry missing — clip will show as missing
+          }
+        })
+    )
+
     setClips(
       project.clips.map((c) => ({
         ...c,
-        url: c.src ?? "",
+        url: c.src ?? blobUrls.get(c.id) ?? "",
         thumbnail: c.thumbnail ?? "",
         role: (c.role ?? "normal") as ClipRole,
         muteAudio: c.muteAudio ?? false,
@@ -275,24 +295,24 @@ export default function App() {
     }
   }
 
-  const handleLoadProject = () => {
+  const handleLoadProject = async () => {
     try {
       const raw = localStorage.getItem(PROJECT_STORAGE_KEY)
       if (!raw) { toast("No saved project"); return }
       const project = JSON.parse(raw) as ProjectData
       if (!project?.version || !Array.isArray(project.clips)) { toast("Invalid project"); return }
-      applyProjectToState(project)
+      await applyProjectToState(project)
       toast("Project loaded")
     } catch { toast("Load failed") }
   }
 
-  const handleRestoreDraft = () => {
+  const handleRestoreDraft = async () => {
     try {
       const raw = localStorage.getItem(DRAFT_STORAGE_KEY)
       if (!raw) return
       const project = JSON.parse(raw) as ProjectData
       if (!project?.version || !Array.isArray(project.clips)) return
-      applyProjectToState(project)
+      await applyProjectToState(project)
       setDraftBanner("dismissed")
       toast("Draft restored")
     } catch { setDraftBanner("dismissed") }
@@ -430,11 +450,21 @@ export default function App() {
       if (!selectedClipId && updated.length > 0) setSelectedClipId(updated[0].id)
       return updated
     })
+    // Persist raw files in IndexedDB so previews survive across sessions even
+    // without Firebase (blob URLs are session-only and can't be serialised).
+    fileArray.forEach((file, i) => {
+      idbSave(newClips[i].id, file).catch(console.error)
+    })
     if (isFirebaseConfigured()) {
       fileArray.forEach((file, i) => {
         const clip = newClips[i]
         uploadMediaToStorage("clips", file, clip.id)
-          .then((url) => { setClips((p) => p.map((c) => c.id === clip.id ? { ...c, url } : c)); revokeIfBlobUrl(clip.url) })
+          .then((url) => {
+            setClips((p) => p.map((c) => c.id === clip.id ? { ...c, url } : c))
+            revokeIfBlobUrl(clip.url)
+            // Firebase URL is now the source of truth; IDB copy no longer needed
+            idbDelete(clip.id).catch(console.error)
+          })
           .catch((err) => console.error("[clips] upload failed", clip.id, err))
       })
     }
@@ -443,6 +473,7 @@ export default function App() {
 
   const handleDeleteClip = (clipId: string) => {
     setClips((prev) => { revokeIfBlobUrl(prev.find((c) => c.id === clipId)?.url); return prev.filter((c) => c.id !== clipId) })
+    idbDelete(clipId).catch(console.error)
     setGoals((prev) => prev.filter((g) => g.clipId !== clipId))
     setPendingGoal((prev) => (prev?.clipId === clipId ? null : prev))
     setSelectedClipId((prevId) => {
