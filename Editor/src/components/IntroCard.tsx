@@ -171,69 +171,66 @@ export function IntroCard({ intro, className = "" }: Props) {
           </span>
         </div>
 
-        {/* VS */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            paddingTop: 44,
-          }}
-        >
-          <span
-            style={{
-              animation: anim.vs,
-              fontSize: 26,
-              fontWeight: 900,
-              color: "rgba(255,255,255,0.55)",
-              letterSpacing: 2,
-              fontFamily: "system-ui, -apple-system, sans-serif",
-              lineHeight: 1,
-            }}
-          >
-            VS
-          </span>
-        </div>
-
-        {/* Away team */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 10,
-            width: 140,
-          }}
-        >
-          {hasAway ? (
-            <BadgeImg
-              src={intro.awayBadgeUrl}
-              alt={intro.opponent || "Away"}
-              animStyle={{ animation: anim.awayTeam }}
-            />
-          ) : hasBoth ? (
-            <BadgePlaceholder label="Away" animStyle={{ animation: anim.awayTeam }} />
-          ) : null}
-          {(hasAway || hasBoth) && (
-            <span
+        {/* VS + away team — only when both badges provided */}
+        {hasBoth && (
+          <>
+            <div
               style={{
-                animation: anim.awayLabel,
-                fontSize: 13,
-                fontWeight: 700,
-                color: "rgba(255,255,255,0.92)",
-                textAlign: "center",
-                lineHeight: 1.3,
-                letterSpacing: 0.2,
-                fontFamily: "system-ui, -apple-system, sans-serif",
-                wordBreak: "break-word",
-                overflowWrap: "anywhere",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                paddingTop: 44,
               }}
             >
-              {intro.opponent || "Away"}
-            </span>
-          )}
-        </div>
+              <span
+                style={{
+                  animation: anim.vs,
+                  fontSize: 26,
+                  fontWeight: 900,
+                  color: "rgba(255,255,255,0.55)",
+                  letterSpacing: 2,
+                  fontFamily: "system-ui, -apple-system, sans-serif",
+                  lineHeight: 1,
+                }}
+              >
+                VS
+              </span>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 10,
+                width: 140,
+              }}
+            >
+              <BadgeImg
+                src={intro.awayBadgeUrl}
+                alt={intro.opponent || "Away"}
+                animStyle={{ animation: anim.awayTeam }}
+              />
+              <span
+                style={{
+                  animation: anim.awayLabel,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: "rgba(255,255,255,0.92)",
+                  textAlign: "center",
+                  lineHeight: 1.3,
+                  letterSpacing: 0.2,
+                  fontFamily: "system-ui, -apple-system, sans-serif",
+                  wordBreak: "break-word",
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {intro.opponent || "Away"}
+              </span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── Divider ──────────────────────────────────────────────── */}

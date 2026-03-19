@@ -66,22 +66,23 @@ export const ScoreboardOverlay: React.FC<ScoreboardOverlayProps> = ({
             <span style={{ fontWeight: 600, minWidth: Math.round(120 * s), textAlign: 'left' }}>
               {awayTeamName}
             </span>
-            {clockOrPeriod ? (
-              <span
-                style={{
-                  marginLeft: Math.round(16 * s),
-                  paddingLeft: Math.round(16 * s),
-                  borderLeft: '1px solid rgba(255,255,255,0.3)',
-                  fontSize: Math.round(22 * s),
-                }}
-              >
-                {clockOrPeriod}
-              </span>
-            ) : null}
-            {label ? (
-              <span style={{ opacity: 0.8, fontSize: Math.round(20 * s) }}>{label}</span>
-            ) : null}
           </div>
+
+          {/* Clock/period row — separate row below score, matching editor layout */}
+          {clockOrPeriod ? (
+            <div
+              style={{
+                marginTop: Math.round(6 * s),
+                paddingTop: Math.round(6 * s),
+                borderTop: '1px solid rgba(255,255,255,0.2)',
+                fontSize: Math.round(22 * s),
+                color: 'rgba(255,255,255,0.9)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {clockOrPeriod}
+            </div>
+          ) : null}
 
           {/* Scorer row — inside the box, below the score row, matching editor layout */}
           {scorerName ? (

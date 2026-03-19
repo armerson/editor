@@ -212,7 +212,7 @@ export function projectJsonToHighlightReelData(
     awayBadgeUrl: awayBadge,
     // Keep legacy imageUrl populated so old renderer IntroCard builds still work.
     imageUrl: homeBadge,
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#0a0a0f",
     // Pass individual fields so IntroCard doesn't need to re-parse subtitle
     opponent: project.intro?.opponent || undefined,
     score: project.intro?.score || undefined,
