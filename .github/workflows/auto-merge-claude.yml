@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      renderer_changed: ${{ steps.check.outputs.renderer_changed }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,3 +29,40 @@ jobs:
           git pull origin main
           git merge origin/${{ github.ref_name }} --no-edit -X theirs -m "chore: auto-merge ${{ github.ref_name }} into main"
           git push origin main
+
+      - name: Check if Renderer files changed
+        id: check
+        run: |
+          if git diff HEAD~1 HEAD --name-only | grep -q '^Renderer/'; then
+            echo "renderer_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "renderer_changed=false" >> $GITHUB_OUTPUT
+          fi
+
+  deploy-remotion:
+    needs: merge
+    if: needs.merge.outputs.renderer_changed == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Renderer
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: Renderer/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy Remotion site to Lambda
+        run: npx remotion lambda sites create --site-name=highlight-reel
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
