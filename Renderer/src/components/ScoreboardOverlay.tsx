@@ -1,4 +1,4 @@
-// v2 — scorer on separate yellow row
+// v3 — scorer inside the scoreboard box, below the score row
 import React from 'react';
 import { AbsoluteFill, useVideoConfig } from 'remotion';
 import type { ScoreboardOverlayData } from '../types/reel';
@@ -82,22 +82,24 @@ export const ScoreboardOverlay: React.FC<ScoreboardOverlayProps> = ({
               <span style={{ opacity: 0.8, fontSize: Math.round(20 * s) }}>{label}</span>
             ) : null}
           </div>
-        </div>
 
-        {/* Scorer — below the scoreboard box */}
-        {scorerName ? (
-          <div
-            style={{
-              paddingLeft: Math.round(8 * s),
-              fontSize: Math.round(22 * s),
-              fontFamily: 'system-ui, sans-serif',
-              color: '#facc15',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            ⚽ {scorerName}
-          </div>
-        ) : null}
+          {/* Scorer row — inside the box, below the score row, matching editor layout */}
+          {scorerName ? (
+            <div
+              style={{
+                marginTop: Math.round(6 * s),
+                paddingTop: Math.round(6 * s),
+                borderTop: '1px solid rgba(255,255,255,0.2)',
+                fontSize: Math.round(22 * s),
+                fontFamily: 'system-ui, sans-serif',
+                color: '#facc15',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              ⚽ {scorerName}
+            </div>
+          ) : null}
+        </div>
       </div>
     </AbsoluteFill>
   );
