@@ -32,7 +32,7 @@ if (!process.env.REMOTION_ROOT) {
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const PORT = Number(process.env.PORT ?? 3001)
-const BUILD_TIME = "2026-03-19T-v5"
+const BUILD_TIME = "2026-03-19T-v6"
 const rendersDir = process.env.RENDERS_DIR
   ? path.resolve(process.env.RENDERS_DIR)
   : path.resolve(process.cwd(), "renders")
