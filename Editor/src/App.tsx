@@ -1307,6 +1307,14 @@ export default function App() {
             <div className="mx-auto mt-4 w-full max-w-2xl">
               <RenderPanel renderState={renderState}
                 fileName={projectTitle.trim().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-") || "highlight"}
+                defaultCaption={[
+                  scoreboard.homeTeamName && scoreboard.awayTeamName
+                    ? `${scoreboard.homeTeamName} ${scoreboard.homeScore ?? 0} - ${scoreboard.awayScore ?? 0} ${scoreboard.awayTeamName}`
+                    : scoreboard.homeTeamName || projectTitle,
+                  intro.matchDate ? `📅 ${intro.matchDate}` : "",
+                  intro.ageGroup ? `⚽ ${intro.ageGroup}` : "",
+                  "\n#MatchHighlights #Football",
+                ].filter(Boolean).join(" · ").replace(" · \n", "\n")}
                 onReset={() => setRenderState({ status: "idle", jobId: null, progress: 0, downloadUrl: null, error: null })} />
             </div>
           </div>

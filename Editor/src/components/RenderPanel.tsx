@@ -1,10 +1,12 @@
 import { useState } from "react"
 import type { RenderState } from "../types"
+import { SharePanel } from "./SharePanel"
 
 type Props = {
   renderState: RenderState
   onReset: () => void
   fileName?: string
+  defaultCaption?: string
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -15,7 +17,7 @@ const STATUS_LABEL: Record<string, string> = {
   error: "Error",
 }
 
-export function RenderPanel({ renderState, onReset, fileName = "highlight" }: Props) {
+export function RenderPanel({ renderState, onReset, fileName = "highlight", defaultCaption }: Props) {
   const { status, progress, downloadUrl, error } = renderState
   const [downloading, setDownloading] = useState(false)
 
@@ -127,7 +129,7 @@ export function RenderPanel({ renderState, onReset, fileName = "highlight" }: Pr
         <p className="mb-3 text-sm text-red-300">{error}</p>
       )}
 
-      {/* Done: inline video preview + download */}
+      {/* Done: inline video preview + download + share */}
       {status === "done" && downloadUrl && (
         <div className="space-y-3">
           <video
@@ -136,17 +138,12 @@ export function RenderPanel({ renderState, onReset, fileName = "highlight" }: Pr
             className="w-full rounded-lg border border-neutral-700 bg-black"
             style={{ maxHeight: 280 }}
           />
-          <button
-            type="button"
-            onClick={handleDownload}
-            disabled={downloading}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-black hover:bg-emerald-400 disabled:cursor-wait disabled:opacity-60"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 4v11" />
-            </svg>
-            {downloading ? "Downloading…" : "Download MP4"}
-          </button>
+          <SharePanel
+            downloadUrl={downloadUrl}
+            defaultCaption={defaultCaption}
+            onDownload={handleDownload}
+            downloading={downloading}
+          />
         </div>
       )}
     </div>
