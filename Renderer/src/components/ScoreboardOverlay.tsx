@@ -40,30 +40,30 @@ export const ScoreboardOverlay: React.FC<ScoreboardOverlayProps> = ({
             position: 'relative',
             display: 'flex',
             flexDirection: 'column',
-            padding: `${Math.round(10 * s)}px ${Math.round(22 * s)}px`,
+            padding: `${Math.round(14 * s)}px ${Math.round(28 * s)}px`,
             backgroundColor: 'rgba(0,0,0,0.75)',
             borderRadius: Math.round(8 * s),
             fontFamily: 'system-ui, sans-serif',
             color: '#fff',
-            fontSize: Math.round(32 * s),
+            fontSize: Math.round(44 * s),
           }}
         >
           {/* Score row */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: Math.round(20 * s) }}>
-            <span style={{ fontWeight: 600, minWidth: Math.round(148 * s), textAlign: 'right' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: Math.round(24 * s) }}>
+            <span style={{ fontWeight: 600, minWidth: Math.round(200 * s), textAlign: 'right' }}>
               {homeTeamName}
             </span>
             <span
               style={{
-                fontSize: Math.round(42 * s),
+                fontSize: Math.round(56 * s),
                 fontWeight: 700,
-                minWidth: Math.round(88 * s),
+                minWidth: Math.round(110 * s),
                 textAlign: 'center',
               }}
             >
               {homeScore} – {awayScore}
             </span>
-            <span style={{ fontWeight: 600, minWidth: Math.round(148 * s), textAlign: 'left' }}>
+            <span style={{ fontWeight: 600, minWidth: Math.round(200 * s), textAlign: 'left' }}>
               {awayTeamName}
             </span>
           </div>
@@ -72,10 +72,10 @@ export const ScoreboardOverlay: React.FC<ScoreboardOverlayProps> = ({
           {clockOrPeriod ? (
             <div
               style={{
-                marginTop: Math.round(6 * s),
-                paddingTop: Math.round(6 * s),
+                marginTop: Math.round(7 * s),
+                paddingTop: Math.round(7 * s),
                 borderTop: '1px solid rgba(255,255,255,0.2)',
-                fontSize: Math.round(27 * s),
+                fontSize: Math.round(36 * s),
                 color: 'rgba(255,255,255,0.9)',
                 whiteSpace: 'nowrap',
               }}
@@ -88,10 +88,10 @@ export const ScoreboardOverlay: React.FC<ScoreboardOverlayProps> = ({
           {scorerName ? (
             <div
               style={{
-                marginTop: Math.round(6 * s),
-                paddingTop: Math.round(6 * s),
+                marginTop: Math.round(7 * s),
+                paddingTop: Math.round(7 * s),
                 borderTop: '1px solid rgba(255,255,255,0.2)',
-                fontSize: Math.round(27 * s),
+                fontSize: Math.round(36 * s),
                 fontFamily: 'system-ui, sans-serif',
                 color: '#facc15',
                 whiteSpace: 'nowrap',
