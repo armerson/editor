@@ -86,6 +86,8 @@ function healthBody(): HealthResponse {
     logger.error({ err }, "Failed to get active job count")
     activeJobs = -1
   }
+  const serveUrl = process.env.REMOTION_SERVE_URL ?? undefined
+  const isLambda = !!(process.env.REMOTION_LAMBDA_FUNCTION_NAME && serveUrl)
   return {
     ok: true,
     version: process.env.npm_package_version ?? "0.1.0",
@@ -93,6 +95,8 @@ function healthBody(): HealthResponse {
     uptime: Math.floor((Date.now() - SERVER_START) / 1000),
     db: "sqlite",
     activeJobs,
+    renderMode: isLambda ? "lambda" : "local",
+    serveUrl,
   }
 }
 

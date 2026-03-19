@@ -28,6 +28,9 @@ export interface HealthResponse {
   uptime: number       // seconds
   db: "sqlite"
   activeJobs: number
+  /** Render mode and Lambda serve URL (if configured) — for deployment diagnostics */
+  renderMode: "lambda" | "local"
+  serveUrl?: string
 }
 
 /** 4xx / 5xx error body */

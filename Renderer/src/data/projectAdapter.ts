@@ -191,22 +191,42 @@ export function projectJsonToHighlightReelData(
     })
   }
 
-  const introParts = [
-    project.intro?.opponent,
-    project.intro?.score,
-    project.intro?.matchDate,
-    project.intro?.ageGroup,
-  ].filter(Boolean)
-
   // Dual badge support: prefer homeBadgeUrl / awayBadgeUrl; fall back to legacy
   // clubBadgeUrl (which maps to homeBadgeUrl for backward compatibility).
   const homeBadge =
     project.intro?.homeBadgeUrl?.trim() || project.intro?.clubBadgeUrl?.trim() || undefined
   const awayBadge = project.intro?.awayBadgeUrl?.trim() || undefined
+  const hasBothBadges = !!(homeBadge && awayBadge)
+
+  // Build subtitle with POSITIONAL empty slots preserved so that legacy Lambda
+  // builds (which don't receive individual opponent/score/matchDate/ageGroup
+  // fields and fall back to subtitle parsing) assign fields to the correct
+  // positions. Without empty slots, filtered-out fields shift later fields
+  // into the wrong slot (e.g. ageGroup ends up parsed as score).
+  //
+  // Dual-badge format:  "opponent · score · matchDate · ageGroup"
+  // Single-badge format: "score · matchDate · ageGroup"  (no opponent slot)
+  let subtitle: string | undefined
+  if (hasBothBadges) {
+    const parts = [
+      project.intro?.opponent ?? '',
+      project.intro?.score ?? '',
+      project.intro?.matchDate ?? '',
+      project.intro?.ageGroup ?? '',
+    ]
+    subtitle = parts.some(Boolean) ? parts.join(' · ') : undefined
+  } else {
+    const parts = [
+      project.intro?.score,
+      project.intro?.matchDate,
+      project.intro?.ageGroup,
+    ].filter(Boolean)
+    subtitle = parts.length > 0 ? parts.join(' · ') : undefined
+  }
 
   const intro: IntroCardData = {
     title: project.intro?.teamName ?? "Highlights",
-    subtitle: introParts.length > 0 ? introParts.join(" · ") : undefined,
+    subtitle,
     durationSeconds: project.intro?.durationSeconds ?? 3,
     homeBadgeUrl: homeBadge,
     awayBadgeUrl: awayBadge,
