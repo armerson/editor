@@ -1466,7 +1466,7 @@ export default function App() {
                     display: "flex", alignItems: "center", justifyContent: "center",
                     pointerEvents: "none",
                   }}>
-                    <img src={outro.sponsorLogoUrls[0]} alt="Sponsor" style={{ height: 40, maxWidth: 100, objectFit: "contain" }} />
+                    <img src={outro.sponsorLogoUrls[0]} alt="Sponsor" style={{ height: 56, maxWidth: 140, objectFit: "contain" }} />
                   </div>
                 )}
 

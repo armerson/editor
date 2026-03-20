@@ -13,7 +13,7 @@ const SPONSOR_IMG_TIMEOUT_MS = 90_000;
 const SponsorLogoOverlay: React.FC<{ src: string }> = ({ src }) => {
   const { width, height } = useVideoConfig();
   const s = Math.min(width, height) / 1080;
-  const logoPx = Math.round(120 * s);
+  const logoPx = Math.round(168 * s);
   const pad = Math.round(24 * s);
   return (
     <AbsoluteFill style={{ pointerEvents: 'none' }}>
