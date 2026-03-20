@@ -1031,31 +1031,8 @@ export default function App() {
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-4">
-              {/* QuickCut Match logo — inline so no external file needed */}
-              <div className="shrink-0 flex items-center gap-1.5 rounded-lg bg-black px-2.5 py-1.5">
-                {/* Icon: lens + speed lines */}
-                <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-                  <defs>
-                    <linearGradient id="qc-grad" x1="0" y1="0" x2="28" y2="28" gradientUnits="userSpaceOnUse">
-                      <stop offset="0%" stopColor="#3b82f6"/>
-                      <stop offset="100%" stopColor="#a855f7"/>
-                    </linearGradient>
-                  </defs>
-                  {/* Speed lines */}
-                  <line x1="2" y1="9" x2="9" y2="9" stroke="url(#qc-grad)" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="1" y1="14" x2="6" y2="14" stroke="url(#qc-grad)" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="2" y1="19" x2="9" y2="19" stroke="url(#qc-grad)" strokeWidth="2" strokeLinecap="round"/>
-                  {/* Camera body */}
-                  <rect x="9" y="7" width="16" height="14" rx="2.5" fill="url(#qc-grad)"/>
-                  {/* Lens */}
-                  <circle cx="17" cy="14" r="4.5" fill="#0a0a0f"/>
-                  <circle cx="17" cy="14" r="2.8" fill="url(#qc-grad)"/>
-                </svg>
-                {/* Wordmark */}
-                <div className="flex flex-col leading-none">
-                  <span className="text-sm font-black italic" style={{background:"linear-gradient(90deg,#3b82f6,#a855f7)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>QuickCut</span>
-                  <span className="text-[10px] font-semibold italic text-white tracking-widest">MATCH</span>
-                </div>
+              <div className="shrink-0 rounded-lg bg-black p-1">
+                <img src="/logo.png" alt="QuickCut Match" className="h-10 w-auto" />
               </div>
               <input type="text" value={projectTitle} onChange={(e) => setProjectTitle(e.target.value)}
                 className="min-w-0 max-w-[240px] border-0 border-b border-transparent bg-transparent px-0 text-sm text-neutral-400 focus:border-neutral-600 focus:outline-none"
