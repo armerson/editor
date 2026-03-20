@@ -978,14 +978,19 @@ export default function App() {
       <header className="relative z-20 shrink-0 border-b border-neutral-800 px-6 py-3">
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
-            <div className="flex items-baseline gap-3">
-              <h1 className="shrink-0 text-lg font-bold leading-none">
-                Ambassadors FC
-                <span className="ml-1.5 font-normal text-neutral-400">Highlight Editor</span>
-              </h1>
-              <input type="text" value={projectTitle} onChange={(e) => setProjectTitle(e.target.value)}
-                className="min-w-0 max-w-[200px] border-0 border-b border-transparent bg-transparent px-0 text-sm text-neutral-400 focus:border-neutral-600 focus:outline-none"
-                placeholder="Project title" />
+            <div className="flex items-center gap-4">
+              <div className="shrink-0 rounded-lg bg-black p-1">
+                <img src="/logo.png" alt="QuickCut Match" className="h-10 w-auto" />
+              </div>
+              <div className="flex items-baseline gap-3">
+                <h1 className="shrink-0 text-lg font-bold leading-none">
+                  Ambassadors FC
+                  <span className="ml-1.5 font-normal text-neutral-400">Highlight Editor</span>
+                </h1>
+                <input type="text" value={projectTitle} onChange={(e) => setProjectTitle(e.target.value)}
+                  className="min-w-0 max-w-[200px] border-0 border-b border-transparent bg-transparent px-0 text-sm text-neutral-400 focus:border-neutral-600 focus:outline-none"
+                  placeholder="Project title" />
+              </div>
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
