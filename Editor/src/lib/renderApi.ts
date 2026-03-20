@@ -57,3 +57,26 @@ export async function getRenderStatus(jobId: string): Promise<RenderStatusRespon
   }
   return (await res.json()) as RenderStatusResponse
 }
+
+export type MusicTrack = {
+  id: string
+  name: string
+  artist_name: string
+  duration: number
+  audio: string
+  image: string
+}
+
+/**
+ * Search the music library via the backend proxy.
+ * Returns [] and throws if JAMENDO_CLIENT_ID is not configured on the server.
+ */
+export async function searchMusic(query: string, limit = 20): Promise<MusicTrack[]> {
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (query.trim()) params.set("q", query.trim())
+  const res = await fetch(`${API_BASE}/api/music/search?${params}`, { headers: apiHeaders() })
+  if (res.status === 503) throw new Error("not_configured")
+  if (!res.ok) throw new Error(`Music search failed: ${res.status}`)
+  const data = await res.json() as { results?: MusicTrack[] }
+  return data.results ?? []
+}

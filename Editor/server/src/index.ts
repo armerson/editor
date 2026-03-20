@@ -393,6 +393,40 @@ app.get("/api/render/:jobId", (req, res) => {
 // ── Static: serve local renders ───────────────────────────────────────────────
 app.use("/renders", express.static(rendersDir, { maxAge: "365d", immutable: true }))
 
+// ── GET /api/music/search ─────────────────────────────────────────────────────
+// Proxy to Jamendo so the client ID is kept server-side (Railway env var).
+// Query params: q (search text), limit (max 50, default 20)
+app.get("/api/music/search", async (req, res) => {
+  const clientId = process.env.JAMENDO_CLIENT_ID
+  if (!clientId) {
+    res.status(503).json({ error: "JAMENDO_CLIENT_ID is not configured on the server" } as ErrorResponse)
+    return
+  }
+
+  const q = typeof req.query.q === "string" ? req.query.q.trim() : ""
+  const limit = Math.min(Number(req.query.limit ?? 20), 50)
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    format: "json",
+    limit: String(Number.isFinite(limit) && limit > 0 ? limit : 20),
+    audioformat: "mp32",
+    order: "popularity_total",
+  })
+  if (q) params.set("search", q)
+  else params.set("tags", "energetic")
+
+  try {
+    const upstream = await fetch(`https://api.jamendo.com/v3.0/tracks/?${params}`)
+    if (!upstream.ok) throw new Error(`Jamendo returned ${upstream.status}`)
+    const data = await upstream.json()
+    res.json(data)
+  } catch (err) {
+    logger.error({ err }, "Jamendo proxy request failed")
+    res.status(502).json({ error: "Music search failed" } as ErrorResponse)
+  }
+})
+
 // ── Start ──────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   logger.info({ port: PORT, rendersDir }, "render server listening")
