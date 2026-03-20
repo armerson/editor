@@ -8,12 +8,20 @@ const FADE_FRAMES = 15;
 type OutroCardProps = OutroCardData & {
   durationFrames: number;
   fps?: number;
+  homeTeam?: string;
+  opponent?: string;
+  homeBadgeUrl?: string;
+  awayBadgeUrl?: string;
 };
 
 export const OutroCard: React.FC<OutroCardProps> = ({
   finalScore,
   sponsorLogoUrls = [],
   durationFrames,
+  homeTeam,
+  opponent,
+  homeBadgeUrl,
+  awayBadgeUrl,
 }) => {
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
@@ -34,11 +42,12 @@ export const OutroCard: React.FC<OutroCardProps> = ({
   const opacity = Math.min(fadeIn, fadeOut);
 
   // Staggered fade-up animations
-  const labelDelay = 4;
-  const scoreDelay = 8;
-  const dividerDelay = 14;
-  const thanksDelay = 20;
-  const sponsorsDelay = 28;
+  const teamsDelay = 2;
+  const labelDelay = 8;
+  const scoreDelay = 12;
+  const dividerDelay = 18;
+  const thanksDelay = 24;
+  const sponsorsDelay = 32;
 
   function fadeUp(startFrame: number): React.CSSProperties {
     const op = interpolate(frame, [startFrame, startFrame + 12], [0, 1], {
@@ -76,6 +85,52 @@ export const OutroCard: React.FC<OutroCardProps> = ({
         background: 'radial-gradient(ellipse 65% 50% at 50% 44%, rgba(99,102,241,0.10) 0%, rgba(250,204,21,0.04) 45%, transparent 70%)',
         pointerEvents: 'none',
       }} />
+
+      {/* Team badges and names */}
+      {(homeTeam || opponent) && (
+        <div style={{
+          ...fadeUp(teamsDelay),
+          display: 'flex',
+          alignItems: 'center',
+          gap: Math.round(20 * s),
+          marginBottom: Math.round(24 * s),
+        }}>
+          {/* Home side */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: Math.round(8 * s) }}>
+            {homeBadgeUrl && (
+              <Img
+                src={homeBadgeUrl}
+                delayRenderTimeoutInMilliseconds={IMG_TIMEOUT_MS}
+                style={{ height: Math.round(72 * s), width: Math.round(72 * s), objectFit: 'contain' }}
+              />
+            )}
+            {homeTeam && (
+              <span style={{ fontSize: Math.round(22 * s), fontWeight: 700, color: 'rgba(255,255,255,0.9)', textAlign: 'center', maxWidth: Math.round(180 * s) }}>
+                {homeTeam}
+              </span>
+            )}
+          </div>
+          {/* VS */}
+          <span style={{ fontSize: Math.round(18 * s), fontWeight: 600, color: 'rgba(255,255,255,0.25)', letterSpacing: Math.round(2 * s) }}>
+            vs
+          </span>
+          {/* Away side */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: Math.round(8 * s) }}>
+            {awayBadgeUrl && (
+              <Img
+                src={awayBadgeUrl}
+                delayRenderTimeoutInMilliseconds={IMG_TIMEOUT_MS}
+                style={{ height: Math.round(72 * s), width: Math.round(72 * s), objectFit: 'contain' }}
+              />
+            )}
+            {opponent && (
+              <span style={{ fontSize: Math.round(22 * s), fontWeight: 700, color: 'rgba(255,255,255,0.9)', textAlign: 'center', maxWidth: Math.round(180 * s) }}>
+                {opponent}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Final Score label */}
       {finalScore && (

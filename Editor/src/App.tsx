@@ -1372,7 +1372,7 @@ export default function App() {
               </div>
               <div className="overflow-hidden rounded-lg border border-neutral-700">
                 <p className="mb-1 px-2 pt-2 text-[9px] text-neutral-500">Outro preview</p>
-                <OutroCard outro={outro} />
+                <OutroCard outro={outro} intro={intro} />
               </div>
             </div>
           </div>
@@ -1427,7 +1427,7 @@ export default function App() {
 
                 {/* Outro card overlay */}
                 {isPlayingReel && showOutroCard && outro.enabled && (
-                  <OutroCard outro={outro} className="absolute inset-0 h-full w-full" />
+                  <OutroCard outro={outro} intro={intro} className="absolute inset-0 h-full w-full" />
                 )}
 
                 {/* Placeholders */}
