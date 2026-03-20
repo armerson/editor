@@ -53,74 +53,74 @@ export function OutroCard({ outro, intro, className = "" }: Props) {
         background: "radial-gradient(ellipse 70% 50% at 50% 44%, rgba(99,102,241,0.10) 0%, rgba(250,204,21,0.04) 40%, transparent 70%)",
       }} />
 
-      {/* Team badges and names from intro */}
-      {intro && (intro.teamName || intro.opponent) && (
-        <div style={{
-          animation: anim.label,
-          display: "flex",
-          alignItems: "center",
-          gap: 16,
-          marginBottom: 20,
-        }}>
-          {/* Home side */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+      {/* Score row: home badge | score | away badge */}
+      <div style={{
+        animation: anim.label,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 20,
+        marginBottom: 8,
+      }}>
+        {/* Home side */}
+        {intro && (intro.homeBadgeUrl || intro.teamName) && (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, minWidth: 80 }}>
             {intro.homeBadgeUrl && (
-              <img src={intro.homeBadgeUrl} alt={intro.teamName} style={{ height: 52, width: 52, objectFit: "contain" }} />
+              <img src={intro.homeBadgeUrl} alt={intro.teamName} style={{ height: 56, width: 56, objectFit: "contain" }} />
             )}
             {intro.teamName && (
-              <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.9)", textAlign: "center", maxWidth: 120, fontFamily: "system-ui, -apple-system, sans-serif" }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.9)", textAlign: "center", maxWidth: 100, fontFamily: "system-ui, -apple-system, sans-serif" }}>
                 {intro.teamName}
               </span>
             )}
           </div>
-          {/* VS */}
-          <span style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.25)", letterSpacing: 2, fontFamily: "system-ui, -apple-system, sans-serif" }}>
-            vs
-          </span>
-          {/* Away side */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+        )}
+
+        {/* Centre: label + score */}
+        {outro.finalScore && (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <p style={{
+              animation: anim.label,
+              margin: 0,
+              fontSize: 14,
+              fontWeight: 700,
+              letterSpacing: 3,
+              textTransform: "uppercase",
+              color: "rgba(255,255,255,0.35)",
+              fontFamily: "system-ui, -apple-system, sans-serif",
+            }}>
+              Final Score
+            </p>
+            <p style={{
+              animation: anim.score,
+              margin: "6px 0 0",
+              fontSize: 72,
+              fontWeight: 800,
+              color: "#facc15",
+              lineHeight: 1,
+              letterSpacing: -1,
+              fontVariantNumeric: "tabular-nums",
+              fontFamily: "system-ui, -apple-system, sans-serif",
+            }}>
+              {outro.finalScore}
+            </p>
+          </div>
+        )}
+
+        {/* Away side */}
+        {intro && (intro.awayBadgeUrl || intro.opponent) && (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, minWidth: 80 }}>
             {intro.awayBadgeUrl && (
-              <img src={intro.awayBadgeUrl} alt={intro.opponent} style={{ height: 52, width: 52, objectFit: "contain" }} />
+              <img src={intro.awayBadgeUrl} alt={intro.opponent} style={{ height: 56, width: 56, objectFit: "contain" }} />
             )}
             {intro.opponent && (
-              <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.9)", textAlign: "center", maxWidth: 120, fontFamily: "system-ui, -apple-system, sans-serif" }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.9)", textAlign: "center", maxWidth: 100, fontFamily: "system-ui, -apple-system, sans-serif" }}>
                 {intro.opponent}
               </span>
             )}
           </div>
-        </div>
-      )}
-
-      {/* Final Score */}
-      {outro.finalScore && (
-        <>
-          <p style={{
-            animation: anim.label,
-            margin: 0,
-            fontSize: 14,
-            fontWeight: 700,
-            letterSpacing: 3,
-            textTransform: "uppercase",
-            color: "rgba(255,255,255,0.35)",
-            fontFamily: "system-ui, -apple-system, sans-serif",
-          }}>
-            Final Score
-          </p>
-          <p style={{
-            animation: anim.score,
-            margin: "6px 0 0",
-            fontSize: 72,
-            fontWeight: 800,
-            color: "#facc15",
-            lineHeight: 1,
-            letterSpacing: -1,
-            fontVariantNumeric: "tabular-nums",
-            fontFamily: "system-ui, -apple-system, sans-serif",
-          }}>
-            {outro.finalScore}
-          </p>
-        </>
-      )}
+        )}
+      </div>
 
       {/* Divider */}
       <div style={{
