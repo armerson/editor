@@ -104,6 +104,7 @@ export default function App() {
   const [currentReelTime, setCurrentReelTime] = useState(0)
   const [projectTitle, setProjectTitle] = useState("Untitled Project")
   const [saveLoadStatus, setSaveLoadStatus] = useState<string | null>(null)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
   const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "pending" | null>(null)
   const [draftBanner, setDraftBanner] = useState<"visible" | "dismissed" | null>(null)
   const [aspectRatio, setAspectRatio] = useState<AspectRatioPreset>("landscape")
@@ -1033,7 +1034,37 @@ export default function App() {
       {/* Body */}
       <main className="flex min-h-0 flex-1 overflow-hidden">
         {/* Sidebar */}
-        <aside className="w-72 shrink-0 overflow-y-auto border-r border-neutral-800 p-4">
+        <aside
+          className="relative shrink-0 border-r border-neutral-800 transition-[width] duration-200"
+          style={{ width: sidebarOpen ? 288 : 40 }}
+        >
+          {/* Collapse / expand toggle — always visible */}
+          <button
+            type="button"
+            onClick={() => setSidebarOpen((v) => !v)}
+            title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+            className="absolute -right-3 top-4 z-20 flex h-6 w-6 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900 text-neutral-400 shadow hover:text-white"
+          >
+            <svg className="h-3 w-3" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+              {sidebarOpen
+                ? <path d="M10.5 3.5 5.5 8l5 4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                : <path d="M5.5 3.5 10.5 8l-5 4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />}
+            </svg>
+          </button>
+
+          {/* Collapsed strip — icon shortcuts */}
+          {!sidebarOpen && (
+            <div className="flex h-full flex-col items-center gap-3 pt-12 pb-4">
+              <button type="button" onClick={() => { setSidebarOpen(true); fileInputRef.current?.click() }}
+                title="Upload clip"
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-yellow-500 text-black hover:bg-yellow-400">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+              </button>
+            </div>
+          )}
+
+          {/* Full sidebar content */}
+          <div className={`h-full overflow-y-auto p-4 ${sidebarOpen ? "" : "hidden"}`}>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-neutral-400">Media</h2>
             <button type="button" onClick={() => fileInputRef.current?.click()}
@@ -1185,6 +1216,7 @@ export default function App() {
               </div>
             </div>
           </div>
+          </div>{/* end full sidebar content */}
         </aside>
 
         {/* Main content */}
