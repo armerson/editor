@@ -136,7 +136,7 @@ export function OutroCard({ outro, intro, className = "" }: Props) {
       <p style={{
         animation: anim.thanks,
         margin: "0 0 16px",
-        fontSize: 13,
+        fontSize: 17,
         fontWeight: 600,
         color: "rgba(255,255,255,0.65)",
         letterSpacing: 0.5,
@@ -169,7 +169,7 @@ export function OutroCard({ outro, intro, className = "" }: Props) {
               <img
                 src={url}
                 alt={`Sponsor ${i + 1}`}
-                style={{ height: 44, maxWidth: 120, objectFit: "contain", opacity: 0.85 }}
+                style={{ height: 59, maxWidth: 160, objectFit: "contain", opacity: 0.85 }}
               />
             </div>
           ))}

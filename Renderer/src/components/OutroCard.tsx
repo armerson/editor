@@ -62,7 +62,7 @@ export const OutroCard: React.FC<OutroCardProps> = ({
   const validLogos = sponsorLogoUrls.filter(Boolean);
 
   // Grid sizing — scale logo tiles based on count
-  const logoH = Math.round((validLogos.length > 4 ? 80 : 100) * s);
+  const logoH = Math.round((validLogos.length > 4 ? 107 : 133) * s);
   const logoMaxW = Math.round(logoH * 2.8);
 
   return (
@@ -175,7 +175,7 @@ export const OutroCard: React.FC<OutroCardProps> = ({
       {/* Thanks heading */}
       <span style={{
         ...fadeUp(thanksDelay),
-        fontSize: Math.round(28 * s),
+        fontSize: Math.round(37 * s),
         fontWeight: 600,
         color: 'rgba(255,255,255,0.65)',
         letterSpacing: Math.round(0.5 * s),
