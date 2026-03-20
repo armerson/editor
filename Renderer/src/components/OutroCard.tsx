@@ -81,7 +81,7 @@ export const OutroCard: React.FC<OutroCardProps> = ({
       {finalScore && (
         <span style={{
           ...fadeUp(labelDelay),
-          fontSize: Math.round(20 * s),
+          fontSize: Math.round(30 * s),
           fontWeight: 700,
           letterSpacing: Math.round(4 * s),
           textTransform: 'uppercase' as const,
@@ -95,7 +95,7 @@ export const OutroCard: React.FC<OutroCardProps> = ({
       {finalScore && (
         <span style={{
           ...fadeUp(scoreDelay),
-          fontSize: Math.round(96 * s),
+          fontSize: Math.round(160 * s),
           fontWeight: 800,
           color: '#facc15',
           lineHeight: 1.1,
