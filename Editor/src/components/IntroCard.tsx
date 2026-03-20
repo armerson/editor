@@ -264,12 +264,12 @@ export function IntroCard({ intro, className = "" }: Props) {
           </p>
         )}
         {intro.ageGroup && (
-          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", margin: 0 }}>
+          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3, textTransform: "uppercase", color: "rgba(255,255,255,0.35)", margin: 0 }}>
             {intro.ageGroup}
           </p>
         )}
         {intro.competition && (
-          <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", margin: 0, fontStyle: "italic" }}>
+          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3, textTransform: "uppercase", color: "rgba(255,255,255,0.4)", margin: 0 }}>
             {intro.competition}
           </p>
         )}

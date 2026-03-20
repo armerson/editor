@@ -398,7 +398,10 @@ export const IntroCard: React.FC<IntroCardProps> = ({
         {ageGroup && (
           <span
             style={{
-              fontSize: Math.round(32 * s),
+              fontSize: Math.round(26 * s),
+              fontWeight: 700,
+              letterSpacing: Math.round(6 * s),
+              textTransform: 'uppercase',
               color: 'rgba(255,255,255,0.35)',
             }}
           >
@@ -408,9 +411,11 @@ export const IntroCard: React.FC<IntroCardProps> = ({
         {competition && (
           <span
             style={{
-              fontSize: Math.round(28 * s),
+              fontSize: Math.round(26 * s),
+              fontWeight: 700,
+              letterSpacing: Math.round(6 * s),
+              textTransform: 'uppercase',
               color: 'rgba(255,255,255,0.38)',
-              fontStyle: 'italic',
             }}
           >
             {competition}
