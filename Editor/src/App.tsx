@@ -39,6 +39,7 @@ import { ScoreboardOverlay } from "./components/ScoreboardOverlay"
 import { AspectRatioPicker } from "./components/AspectRatioPicker"
 import { ValidationPanel } from "./components/ValidationPanel"
 import { RenderPanel } from "./components/RenderPanel"
+import { MusicSearch } from "./components/MusicSearch"
 import { TimelineTrack, arrayMove } from "./components/TimelineTrack"
 
 function formatTime(seconds: number): string {
@@ -648,6 +649,12 @@ export default function App() {
       setMusicTrack((prev) => { revokeIfBlobUrl(prev?.url); return { name: file.name, url } })
     }
     e.target.value = ""
+  }
+
+  /** Use a track from the Jamendo library — URL is a direct MP3, no upload needed. */
+  const handleLibraryTrackSelected = ({ name, url }: { name: string; url: string }) => {
+    revokeIfBlobUrl(musicTrack?.url)
+    setMusicTrack({ name, url })
   }
 
   // ── Reel playback ──────────────────────────────────────────────────────────
@@ -1477,6 +1484,9 @@ export default function App() {
                   <button type="button" onClick={() => { revokeIfBlobUrl(musicTrack.url); setMusicTrack(null); idbDelete("__music__").catch(console.error) }}
                     className="text-xs text-neutral-500 hover:text-red-400">Remove</button>
                 )}
+              </div>
+              <div className="mb-3">
+                <MusicSearch onSelectTrack={handleLibraryTrackSelected} />
               </div>
 
               {musicTrack && (
