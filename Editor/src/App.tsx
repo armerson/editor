@@ -191,6 +191,24 @@ export default function App() {
   totalReelDurationRef.current = totalReelDuration
   effectiveOutroDurationRef.current = effectiveOutroDuration
 
+  // Role-based playback ordering
+  const introRoleClips = clips.filter(c => c.role === 'intro')
+  const normalClips = clips.filter(c => !c.role || c.role === 'normal')
+  const outroRoleClips = clips.filter(c => c.role === 'outro')
+  const reelPlaybackOrder = [...introRoleClips, ...normalClips, ...outroRoleClips]
+
+  // Precompute reel start time for each clip in reelPlaybackOrder
+  const reelClipStartTimes: number[] = []
+  {
+    let t = introRoleClips.length === 0 ? effectiveIntroDuration : 0
+    for (let i = 0; i < reelPlaybackOrder.length; i++) {
+      reelClipStartTimes.push(t)
+      t += Math.max(0, reelPlaybackOrder[i].trimEnd - reelPlaybackOrder[i].trimStart)
+      if (introRoleClips.length > 0 && i === introRoleClips.length - 1) t += effectiveIntroDuration
+      if (outroRoleClips.length > 0 && i === introRoleClips.length + normalClips.length - 1) t += effectiveOutroDuration
+    }
+  }
+
   // ── Serialisation ──────────────────────────────────────────────────────────
 
   function buildProjectSnapshot(): ProjectData {
@@ -547,6 +565,10 @@ export default function App() {
     setIntro((p) => ({ ...p, durationSeconds: Math.max(1, Math.min(10, newDuration)) }))
   }
 
+  const updateOutroDuration = (newDuration: number) => {
+    setOutro((p) => ({ ...p, durationSeconds: Math.max(2, Math.min(20, newDuration)) }))
+  }
+
   const handleReorderClips = (from: number, to: number) =>
     setClips((prev) => arrayMove(prev, from, to))
 
@@ -722,54 +744,46 @@ export default function App() {
   /** Swap to the pre-buffered video, then load the clip after next into the
    *  new buffer so it's ready for the following transition. */
   const doTransition = (nextIdx: number) => {
-    const next = clips[nextIdx]
+    // Insert intro card between intro-role clips and normal clips
+    if (introRoleClips.length > 0 && nextIdx === introRoleClips.length && introEnabled && effectiveIntroDuration > 0) {
+      const firstPostIntro = normalClips[0] ?? outroRoleClips[0]
+      const bufVideo = activePrimaryRef.current ? bufferRef.current : primaryRef.current
+      if (firstPostIntro && bufVideo && bufVideo.src !== firstPostIntro.url) {
+        bufVideo.src = firstPostIntro.url; bufVideo.currentTime = firstPostIntro.trimStart; bufVideo.muted = true; bufVideo.load()
+      }
+      setShowIntroCard(true); setSelectedClipId(null); return
+    }
+    // Insert outro card between normal clips and outro-role clips
+    if (outroRoleClips.length > 0 && nextIdx === introRoleClips.length + normalClips.length && outro.enabled && outro.durationSeconds > 0) {
+      const firstOutroRole = outroRoleClips[0]
+      const bufVideo = activePrimaryRef.current ? bufferRef.current : primaryRef.current
+      if (firstOutroRole && bufVideo && bufVideo.src !== firstOutroRole.url) {
+        bufVideo.src = firstOutroRole.url; bufVideo.currentTime = firstOutroRole.trimStart; bufVideo.muted = true; bufVideo.load()
+      }
+      outroStartTimeRef.current = performance.now(); setShowOutroCard(true); setSelectedClipId(null); return
+    }
+    const next = reelPlaybackOrder[nextIdx]
     if (!next) {
       if (outro.enabled && outro.durationSeconds > 0) {
-        outroStartTimeRef.current = performance.now()
-        setShowOutroCard(true)
-        setSelectedClipId(null)
-      } else {
-        setIsPlayingReel(false)
-      }
+        outroStartTimeRef.current = performance.now(); setShowOutroCard(true); setSelectedClipId(null)
+      } else { setIsPlayingReel(false) }
       return
     }
-
     const bufVideo = activePrimaryRef.current ? bufferRef.current : primaryRef.current
     if (bufVideo) {
-      // Only reset src+position when the buffer wasn't already preloaded to this
-      // clip — an unnecessary seek at transition time is the main source of the
-      // black-frame gap.
-      if (bufVideo.src !== next.url) {
-        bufVideo.src = next.url
-        bufVideo.currentTime = next.trimStart
-      }
+      if (bufVideo.src !== next.url) { bufVideo.src = next.url; bufVideo.currentTime = next.trimStart }
       bufVideo.muted = !clipAudioOn || (next.muteAudio ?? false)
       void bufVideo.play().catch((e) => console.warn("[reel] buffer play failed", e))
     }
-
-    // Swap which element is "active"
     activePrimaryRef.current = !activePrimaryRef.current
     videoRef.current = activePrimaryRef.current ? primaryRef.current : bufferRef.current
-    setActivePrimary(activePrimaryRef.current)
-    setSelectedClipId(next.id)
-
-    // Preload the clip after next into the newly-idle buffer.
-    // We play() it briefly (muted) to warm up the decoder so the first frame is
-    // ready before the next transition fires — then pause so we don't drift.
-    const afterNext = clips[nextIdx + 1]
+    setActivePrimary(activePrimaryRef.current); setSelectedClipId(next.id)
+    const afterNext = reelPlaybackOrder[nextIdx + 1]
     const newBuf = activePrimaryRef.current ? bufferRef.current : primaryRef.current
     if (afterNext && newBuf && newBuf.src !== afterNext.url) {
-      console.log("[reel] preloading clip", nextIdx + 1, afterNext.id.slice(0, 8))
-      newBuf.src = afterNext.url
-      newBuf.currentTime = afterNext.trimStart
-      newBuf.muted = true
-      // .load() tells the browser to start buffering from trimStart.
-      // Avoid play().then(pause) — the async callback can fire after the reel
-      // ends and stomp the primary video's currentTime/paused state.
-      newBuf.load()
+      newBuf.src = afterNext.url; newBuf.currentTime = afterNext.trimStart; newBuf.muted = true; newBuf.load()
     }
-    console.log("[reel] transition → clip", nextIdx, next.id.slice(0, 8),
-      "active:", activePrimaryRef.current ? "primary" : "buffer")
+    console.log("[reel] transition →", nextIdx, next.id.slice(0, 8))
   }
 
   /** Called by onTimeUpdate on whichever video is currently active. */
@@ -1480,6 +1494,7 @@ export default function App() {
                 outroDurationSeconds={effectiveOutroDuration}
                 onSelectClip={handleSelectClip} onSelectIntro={handleSelectIntro} onSelectOutro={handleSelectOutro}
                 onTrimIntro={updateIntroDuration}
+                onTrimOutro={updateOutroDuration}
                 onReorder={handleReorderClips}
                 onTrimClip={updateClipTrim} onAddGoalAtReelTime={handleAddGoalAtReelTime} />
             </div>
