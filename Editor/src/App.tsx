@@ -1454,12 +1454,12 @@ export default function App() {
                     ⚽ GOAL
                   </button>
                 )}
-                {selectedClip?.url && isNormalClip && selectedClip.showScoreboard && !(isPlayingReel && showIntroCard) && (
+                {selectedClip?.url && isNormalClip && selectedClip.showScoreboard && !(isPlayingReel && (showIntroCard || showOutroCard)) && (
                   <ScoreboardOverlay scoreboard={scoreboard} minuteMarker={selectedClip.minuteMarker ?? ""} goals={goals} clips={clips} clipId={selectedClip.id} currentTimeInClip={videoCurrentTime} showScorerAfterGoal={selectedClip.showScorerAfterGoal} />
                 )}
 
                 {/* Primary sponsor logo — bottom-right corner during normal clip playback only */}
-                {outro.sponsorLogoUrls[0] && selectedClip?.url && isNormalClip && !(isPlayingReel && showIntroCard) && (
+                {outro.sponsorLogoUrls[0] && selectedClip?.url && isNormalClip && !(isPlayingReel && (showIntroCard || showOutroCard)) && (
                   <div style={{
                     position: "absolute", bottom: 10, right: 10,
                     background: "rgba(0,0,0,0.45)", borderRadius: 6, padding: "4px 6px",
