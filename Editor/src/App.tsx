@@ -140,6 +140,11 @@ export default function App() {
   // Mirrors showIntroCard state for use inside RAF closure
   const showIntroCardRef = useRef(false)
   showIntroCardRef.current = showIntroCard
+  const [showOutroCard, setShowOutroCard] = useState(false)
+  const showOutroCardRef = useRef(false)
+  showOutroCardRef.current = showOutroCard
+  const outroStartTimeRef = useRef<number>(0)
+  const effectiveOutroDurationRef = useRef(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const reelStartTimeRef = useRef<number>(0)
   const musicStartedThisReelRef = useRef(false)
@@ -182,8 +187,9 @@ export default function App() {
   const effectiveOutroDuration = outro.enabled ? outro.durationSeconds : 0
   const totalReelDuration =
     effectiveIntroDuration + clips.reduce((s, c) => s + Math.max(0, c.trimEnd - c.trimStart), 0) + effectiveOutroDuration
-  // Keep ref in sync so the RAF loop always has the latest value.
+  // Keep refs in sync so the RAF loop always has the latest values.
   totalReelDurationRef.current = totalReelDuration
+  effectiveOutroDurationRef.current = effectiveOutroDuration
 
   // ── Serialisation ──────────────────────────────────────────────────────────
 
@@ -526,15 +532,15 @@ export default function App() {
   }
 
   const handleSelectClip = (id: string) => {
-    setIsPlayingReel(false); setShowIntroCard(false); setSelectedClipId(id); setIntroSelected(false); setOutroSelected(false); audioRef.current?.pause()
+    setIsPlayingReel(false); setShowIntroCard(false); setShowOutroCard(false); setSelectedClipId(id); setIntroSelected(false); setOutroSelected(false); audioRef.current?.pause()
   }
 
   const handleSelectIntro = () => {
-    setIsPlayingReel(false); setShowIntroCard(false); setSelectedClipId(null); setIntroSelected(true); setOutroSelected(false); audioRef.current?.pause()
+    setIsPlayingReel(false); setShowIntroCard(false); setShowOutroCard(false); setSelectedClipId(null); setIntroSelected(true); setOutroSelected(false); audioRef.current?.pause()
   }
 
   const handleSelectOutro = () => {
-    setIsPlayingReel(false); setShowIntroCard(false); setSelectedClipId(null); setIntroSelected(false); setOutroSelected(true); audioRef.current?.pause()
+    setIsPlayingReel(false); setShowIntroCard(false); setShowOutroCard(false); setSelectedClipId(null); setIntroSelected(false); setOutroSelected(true); audioRef.current?.pause()
   }
 
   const updateIntroDuration = (newDuration: number) => {
@@ -717,7 +723,16 @@ export default function App() {
    *  new buffer so it's ready for the following transition. */
   const doTransition = (nextIdx: number) => {
     const next = clips[nextIdx]
-    if (!next) { setIsPlayingReel(false); return }
+    if (!next) {
+      if (outro.enabled && outro.durationSeconds > 0) {
+        outroStartTimeRef.current = performance.now()
+        setShowOutroCard(true)
+        setSelectedClipId(null)
+      } else {
+        setIsPlayingReel(false)
+      }
+      return
+    }
 
     const bufVideo = activePrimaryRef.current ? bufferRef.current : primaryRef.current
     if (bufVideo) {
@@ -813,7 +828,7 @@ export default function App() {
     }
 
     // Skip intro card in preview when intro is disabled.
-    setShowIntroCard(introEnabled); setIsPlayingReel(true)
+    setShowIntroCard(introEnabled); setShowOutroCard(false); setIsPlayingReel(true)
     setSelectedClipId(introEnabled ? null : (clips[0]?.id ?? null)); setCurrentReelTime(0)
     reelStartTimeRef.current = performance.now()
     musicStartedThisReelRef.current = false
@@ -836,8 +851,14 @@ export default function App() {
       if (!isPlayingReelRef.current) return
       const elapsed = (performance.now() - reelStartTimeRef.current) / 1000
 
-      // Wall-clock drives reelTime only during the intro card.
+      // Wall-clock drives reelTime during the intro card and outro card.
       if (showIntroCardRef.current) setCurrentReelTime(elapsed)
+      if (showOutroCardRef.current) {
+        const outroElapsed = (performance.now() - outroStartTimeRef.current) / 1000
+        setCurrentReelTime(
+          totalReelDurationRef.current - effectiveOutroDurationRef.current + outroElapsed
+        )
+      }
 
       const audio = audioRef.current
 
@@ -886,6 +907,12 @@ export default function App() {
     const t = setTimeout(() => { setShowIntroCard(false); setSelectedClipId(clips[0].id) }, effectiveIntroDuration * 1000)
     return () => clearTimeout(t)
   }, [isPlayingReel, showIntroCard, clips, effectiveIntroDuration])
+
+  useEffect(() => {
+    if (!isPlayingReel || !showOutroCard) return
+    const t = setTimeout(() => { setIsPlayingReel(false); setShowOutroCard(false) }, effectiveOutroDuration * 1000)
+    return () => clearTimeout(t)
+  }, [isPlayingReel, showOutroCard, effectiveOutroDuration])
 
   // When the intro card ends (showIntroCard → false), the primary video was
   // already loaded in handlePlayReel; just press play.
@@ -1367,6 +1394,11 @@ export default function App() {
                 {/* Intro card overlay */}
                 {isPlayingReel && showIntroCard && introEnabled && (
                   <IntroCard intro={intro} className="absolute inset-0 h-full w-full" />
+                )}
+
+                {/* Outro card overlay */}
+                {isPlayingReel && showOutroCard && outro.enabled && (
+                  <OutroCard outro={outro} className="absolute inset-0 h-full w-full" />
                 )}
 
                 {/* Placeholders */}
