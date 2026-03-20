@@ -268,6 +268,43 @@ function IntroTrimHandle({ introDurationSeconds, pxPerSec, onTrimIntro }: IntroT
   )
 }
 
+// ── Outro duration handle ─────────────────────────────────────────────────────
+
+type OutroTrimHandleProps = {
+  outroDurationSeconds: number
+  pxPerSec: number
+  onTrimOutro: (newDuration: number) => void
+}
+
+function OutroTrimHandle({ outroDurationSeconds, pxPerSec, onTrimOutro }: OutroTrimHandleProps) {
+  const dragRef = useRef<{ startX: number; startDuration: number } | null>(null)
+
+  return (
+    <div
+      className="absolute top-0 bottom-0 left-0 z-20 flex w-2.5 items-center justify-center cursor-ew-resize"
+      onPointerDown={(e) => {
+        e.stopPropagation()
+        e.currentTarget.setPointerCapture(e.pointerId)
+        dragRef.current = { startX: e.clientX, startDuration: outroDurationSeconds }
+      }}
+      onPointerMove={(e) => {
+        if (!dragRef.current) return
+        const dSec = (e.clientX - dragRef.current.startX) / pxPerSec
+        // Dragging left expands (negative dSec = larger duration), dragging right shrinks
+        const clamped = Math.max(2, Math.min(20, dragRef.current.startDuration - dSec))
+        onTrimOutro(clamped)
+      }}
+      onPointerUp={(e) => {
+        dragRef.current = null
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="h-full w-0.5 rounded-full bg-yellow-400/80" />
+    </div>
+  )
+}
+
 // ── Timeline track props ──────────────────────────────────────────────────────
 
 type Props = {
@@ -283,6 +320,7 @@ type Props = {
   onSelectIntro: () => void
   onSelectOutro: () => void
   onTrimIntro: (newDuration: number) => void
+  onTrimOutro: (newDuration: number) => void
   onReorder: (from: number, to: number) => void
   onTrimClip: (clipId: string, trimStart: number, trimEnd: number) => void
   /** If provided, clicking the timeline background at a time position opens the
@@ -307,6 +345,7 @@ export function TimelineTrack({
   onSelectIntro,
   onSelectOutro,
   onTrimIntro,
+  onTrimOutro,
   onReorder,
   onTrimClip,
   onAddGoalAtReelTime,
@@ -328,6 +367,11 @@ export function TimelineTrack({
     return m
   }, [goals])
 
+  // Split clips by role for display ordering
+  const introRoleClips = clips.filter((c) => c.role === 'intro')
+  const normalClips = clips.filter((c) => !c.role || c.role === 'normal')
+  const outroRoleClips = clips.filter((c) => c.role === 'outro')
+
   const introDuration = introDurationSeconds
   const outroDuration = outroDurationSeconds
   const clipsTrimmedDuration = clips.reduce(
@@ -347,9 +391,14 @@ export function TimelineTrack({
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (!over || active.id === over.id) return
-    const oldIndex = clips.findIndex((c) => c.id === active.id)
-    const newIndex = clips.findIndex((c) => c.id === over.id)
-    if (oldIndex !== -1 && newIndex !== -1) onReorder(oldIndex, newIndex)
+    // Find indices within normalClips, then map to full clips array index
+    const oldNormalIndex = normalClips.findIndex((c) => c.id === active.id)
+    const newNormalIndex = normalClips.findIndex((c) => c.id === over.id)
+    if (oldNormalIndex !== -1 && newNormalIndex !== -1) {
+      const oldIndex = clips.findIndex((c) => c.id === active.id)
+      const newIndex = clips.findIndex((c) => c.id === over.id)
+      if (oldIndex !== -1 && newIndex !== -1) onReorder(oldIndex, newIndex)
+    }
   }
 
   if (clips.length === 0) {
@@ -408,6 +457,53 @@ export function TimelineTrack({
 
         {/* Segments row */}
         <div className="relative flex gap-px">
+          {/* Non-DnD intro-role clips (before intro block) */}
+          {introRoleClips.map((clip) => {
+            const trimmedDuration = Math.max(0, clip.trimEnd - clip.trimStart)
+            const widthPx =
+              totalReelDuration > 0
+                ? Math.max(56, (trimmedDuration / totalReelDuration) * timelineWidthPx)
+                : 80
+            const hasGoals = goals.some((g) => g.clipId === clip.id)
+            return (
+              <button
+                key={clip.id}
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onSelectClip(clip.id) }}
+                style={{ width: widthPx, minWidth: Math.min(56, widthPx) }}
+                className={`group relative flex shrink-0 flex-col overflow-hidden rounded-lg border transition-colors ${
+                  selectedClipId === clip.id
+                    ? "border-yellow-500 ring-1 ring-yellow-500/40"
+                    : "border-neutral-700 hover:border-neutral-500"
+                } bg-neutral-900`}
+              >
+                {ROLE_BADGE['intro'] && (
+                  <span className={`absolute left-1 top-1 z-10 rounded px-1 text-[8px] font-bold leading-none ${ROLE_BADGE['intro'].cls}`}>
+                    {ROLE_BADGE['intro'].label}
+                  </span>
+                )}
+                <div className="relative h-8 w-full overflow-hidden bg-neutral-800">
+                  {clip.thumbnail ? (
+                    <img src={clip.thumbnail} alt={clip.name} className="h-full w-full object-cover" draggable={false} />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <svg className="h-5 w-5 text-neutral-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
+                      </svg>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-1 px-1.5 py-1">
+                  <span className="truncate text-[10px] font-medium text-neutral-300">{clip.name}</span>
+                  <div className="flex shrink-0 items-center gap-1 text-[10px] tabular-nums text-neutral-500">
+                    {hasGoals && <span title="Has goals">⚽</span>}
+                    {(trimmedDuration / 60 >= 1 ? Math.floor(trimmedDuration / 60) + ":" : "") + Math.floor(trimmedDuration % 60).toString().padStart(2, "0")}
+                  </div>
+                </div>
+              </button>
+            )
+          })}
+
           {/* Intro block */}
           {introDuration > 0 && (
             <button
@@ -434,18 +530,18 @@ export function TimelineTrack({
             </button>
           )}
 
-          {/* Sortable clips */}
+          {/* Sortable normal clips */}
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
           >
             <SortableContext
-              items={clips.map((c) => c.id)}
+              items={normalClips.map((c) => c.id)}
               strategy={horizontalListSortingStrategy}
             >
               <div className="flex gap-px">
-                {clips.map((clip) => {
+                {normalClips.map((clip) => {
                   const trimmedDuration = Math.max(0, clip.trimEnd - clip.trimStart)
                   const widthPx =
                     totalReelDuration > 0
@@ -488,8 +584,60 @@ export function TimelineTrack({
               <div className="flex items-center justify-center px-1.5 py-1">
                 <span className="text-[10px] tabular-nums text-purple-400">{outroDuration.toFixed(1)}s</span>
               </div>
+              <OutroTrimHandle
+                outroDurationSeconds={outroDuration}
+                pxPerSec={pxPerSec}
+                onTrimOutro={onTrimOutro}
+              />
             </button>
           )}
+
+          {/* Non-DnD outro-role clips (after outro block) */}
+          {outroRoleClips.map((clip) => {
+            const trimmedDuration = Math.max(0, clip.trimEnd - clip.trimStart)
+            const widthPx =
+              totalReelDuration > 0
+                ? Math.max(56, (trimmedDuration / totalReelDuration) * timelineWidthPx)
+                : 80
+            const hasGoals = goals.some((g) => g.clipId === clip.id)
+            return (
+              <button
+                key={clip.id}
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onSelectClip(clip.id) }}
+                style={{ width: widthPx, minWidth: Math.min(56, widthPx) }}
+                className={`group relative flex shrink-0 flex-col overflow-hidden rounded-lg border transition-colors ${
+                  selectedClipId === clip.id
+                    ? "border-yellow-500 ring-1 ring-yellow-500/40"
+                    : "border-neutral-700 hover:border-neutral-500"
+                } bg-neutral-900`}
+              >
+                {ROLE_BADGE['outro'] && (
+                  <span className={`absolute left-1 top-1 z-10 rounded px-1 text-[8px] font-bold leading-none ${ROLE_BADGE['outro'].cls}`}>
+                    {ROLE_BADGE['outro'].label}
+                  </span>
+                )}
+                <div className="relative h-8 w-full overflow-hidden bg-neutral-800">
+                  {clip.thumbnail ? (
+                    <img src={clip.thumbnail} alt={clip.name} className="h-full w-full object-cover" draggable={false} />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <svg className="h-5 w-5 text-neutral-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
+                      </svg>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-1 px-1.5 py-1">
+                  <span className="truncate text-[10px] font-medium text-neutral-300">{clip.name}</span>
+                  <div className="flex shrink-0 items-center gap-1 text-[10px] tabular-nums text-neutral-500">
+                    {hasGoals && <span title="Has goals">⚽</span>}
+                    {(trimmedDuration / 60 >= 1 ? Math.floor(trimmedDuration / 60) + ":" : "") + Math.floor(trimmedDuration % 60).toString().padStart(2, "0")}
+                  </div>
+                </div>
+              </button>
+            )
+          })}
         </div>
 
         {/* Goal markers */}
