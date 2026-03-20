@@ -1,4 +1,4 @@
-import type { OutroData } from "../types"
+import type { IntroData, OutroData } from "../types"
 
 const KEYFRAMES = `
 @keyframes oc-fade-up {
@@ -13,10 +13,11 @@ const KEYFRAMES = `
 
 type Props = {
   outro: OutroData
+  intro?: IntroData
   className?: string
 }
 
-export function OutroCard({ outro, className = "" }: Props) {
+export function OutroCard({ outro, intro, className = "" }: Props) {
   const anim = {
     score:    "oc-fade-up 0.4s 0.1s both",
     label:    "oc-fade 0.35s 0.05s both",
@@ -51,6 +52,44 @@ export function OutroCard({ outro, className = "" }: Props) {
         inset: 0,
         background: "radial-gradient(ellipse 70% 50% at 50% 44%, rgba(99,102,241,0.10) 0%, rgba(250,204,21,0.04) 40%, transparent 70%)",
       }} />
+
+      {/* Team badges and names from intro */}
+      {intro && (intro.teamName || intro.opponent) && (
+        <div style={{
+          animation: anim.label,
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+          marginBottom: 20,
+        }}>
+          {/* Home side */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+            {intro.homeBadgeUrl && (
+              <img src={intro.homeBadgeUrl} alt={intro.teamName} style={{ height: 52, width: 52, objectFit: "contain" }} />
+            )}
+            {intro.teamName && (
+              <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.9)", textAlign: "center", maxWidth: 120, fontFamily: "system-ui, -apple-system, sans-serif" }}>
+                {intro.teamName}
+              </span>
+            )}
+          </div>
+          {/* VS */}
+          <span style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.25)", letterSpacing: 2, fontFamily: "system-ui, -apple-system, sans-serif" }}>
+            vs
+          </span>
+          {/* Away side */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+            {intro.awayBadgeUrl && (
+              <img src={intro.awayBadgeUrl} alt={intro.opponent} style={{ height: 52, width: 52, objectFit: "contain" }} />
+            )}
+            {intro.opponent && (
+              <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.9)", textAlign: "center", maxWidth: 120, fontFamily: "system-ui, -apple-system, sans-serif" }}>
+                {intro.opponent}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Final Score */}
       {outro.finalScore && (

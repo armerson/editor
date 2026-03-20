@@ -459,6 +459,10 @@ export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
               durationSeconds={props.outro.durationSeconds}
               durationFrames={outroDurationFrames}
               fps={fps}
+              homeTeam={props.intro?.title}
+              opponent={props.intro?.opponent}
+              homeBadgeUrl={props.intro?.homeBadgeUrl ?? props.intro?.imageUrl}
+              awayBadgeUrl={props.intro?.awayBadgeUrl}
             />
           </Sequence>
         );
