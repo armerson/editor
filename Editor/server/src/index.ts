@@ -4,6 +4,7 @@ import path from "node:path"
 import express from "express"
 import cors from "cors"
 import { logger } from "./logger"
+import db from "./db"
 import { ProjectSchema } from "./projectSchema"
 import { validateProjectForRender } from "./validateProject"
 import {
@@ -48,6 +49,44 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-in-prod"
 const USERS_RAW = process.env.USERS || ""
 
 // ── Auth helpers ─────────────────────────────────────────────────────────────
+
+/** Hash a password with scrypt (Node built-in, memory-hard). Returns "salt:hash". */
+function hashPassword(password: string): Promise<string> {
+  const salt = crypto.randomBytes(16).toString("hex")
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(password, salt, 64, (err, key) => {
+      if (err) reject(err)
+      else resolve(`${salt}:${key.toString("hex")}`)
+    })
+  })
+}
+
+/** Verify a password against a stored "salt:hash" string. */
+function verifyPassword(password: string, stored: string): Promise<boolean> {
+  const [salt, hash] = stored.split(":")
+  if (!salt || !hash) return Promise.resolve(false)
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(password, salt, 64, (err, key) => {
+      if (err) reject(err)
+      else {
+        try {
+          resolve(crypto.timingSafeEqual(Buffer.from(hash, "hex"), key))
+        } catch {
+          resolve(false)
+        }
+      }
+    })
+  })
+}
+
+/** Check whether any users exist in the DB (used for dynamic auth gate). */
+function dbHasUsers(): boolean {
+  try {
+    return !!db.prepare("SELECT 1 FROM users LIMIT 1").get()
+  } catch {
+    return false
+  }
+}
 
 /** Parse USERS env var into a list of {email, password} objects. */
 function parseUsers(): Array<{ email: string; password: string }> {
@@ -155,58 +194,110 @@ app.get("/healthz", (_req, res) => {
   res.json(healthBody())
 })
 
-// ── POST /api/auth/login ──────────────────────────────────────────────────────
+// ── POST /api/auth/register ───────────────────────────────────────────────────
 // Public — must be registered BEFORE the auth guard middleware.
-app.post("/api/auth/login", (req, res) => {
+app.post("/api/auth/register", async (req, res) => {
   const { email, password } = (req.body ?? {}) as { email?: unknown; password?: unknown }
   if (typeof email !== "string" || typeof password !== "string" || !email || !password) {
     res.status(400).json({ error: "email and password are required" } as ErrorResponse)
     return
   }
-  const users = parseUsers()
-  if (users.length === 0) {
-    // No USERS configured — login endpoint unavailable; use bypass token.
-    res.status(503).json({ error: "Login not configured. Use your bypass token." } as ErrorResponse)
+  if (password.length < 8) {
+    res.status(400).json({ error: "Password must be at least 8 characters" } as ErrorResponse)
     return
   }
-  const user = users.find(u => u.email === email.trim().toLowerCase() && u.password === password)
-  if (!user) {
-    logger.warn({ email }, "failed login attempt")
+  const normalEmail = email.trim().toLowerCase()
+  const existing = db.prepare("SELECT 1 FROM users WHERE email = ?").get(normalEmail)
+  if (existing) {
+    res.status(409).json({ error: "An account with this email already exists" } as ErrorResponse)
+    return
+  }
+  try {
+    const hash = await hashPassword(password)
+    db.prepare("INSERT INTO users (email, password_hash) VALUES (?, ?)").run(normalEmail, hash)
+    const token = signJwt({ email: normalEmail })
+    logger.info({ email: normalEmail }, "new user registered")
+    res.status(201).json({ token } as LoginResponse)
+  } catch (err) {
+    logger.error({ err }, "registration failed")
+    res.status(500).json({ error: "Registration failed. Please try again." } as ErrorResponse)
+  }
+})
+
+// ── POST /api/auth/login ──────────────────────────────────────────────────────
+// Public — must be registered BEFORE the auth guard middleware.
+app.post("/api/auth/login", async (req, res) => {
+  const { email, password } = (req.body ?? {}) as { email?: unknown; password?: unknown }
+  if (typeof email !== "string" || typeof password !== "string" || !email || !password) {
+    res.status(400).json({ error: "email and password are required" } as ErrorResponse)
+    return
+  }
+  const normalEmail = email.trim().toLowerCase()
+
+  // 1. Check env-var users (plain-text password, backward compat)
+  const envUsers = parseUsers()
+  const envUser = envUsers.find(u => u.email === normalEmail && u.password === password)
+  if (envUser) {
+    const token = signJwt({ email: envUser.email })
+    logger.info({ email: envUser.email }, "user logged in (env)")
+    res.json({ token } as LoginResponse)
+    return
+  }
+
+  // 2. Check DB users (hashed password)
+  const dbUser = db.prepare("SELECT password_hash FROM users WHERE email = ?").get(normalEmail) as
+    | { password_hash: string }
+    | undefined
+  if (dbUser) {
+    const valid = await verifyPassword(password, dbUser.password_hash)
+    if (valid) {
+      const token = signJwt({ email: normalEmail })
+      logger.info({ email: normalEmail }, "user logged in (db)")
+      res.json({ token } as LoginResponse)
+      return
+    }
+    logger.warn({ email: normalEmail }, "failed login attempt")
     res.status(401).json({ error: "Invalid email or password" } as ErrorResponse)
     return
   }
-  const token = signJwt({ email: user.email })
-  logger.info({ email: user.email }, "user logged in")
-  const body: LoginResponse = { token }
-  res.json(body)
+
+  // 3. No matching user found anywhere
+  if (envUsers.length === 0 && !dbHasUsers()) {
+    res.status(503).json({ error: "No accounts exist yet. Please register first." } as ErrorResponse)
+    return
+  }
+  logger.warn({ email: normalEmail }, "failed login attempt")
+  res.status(401).json({ error: "Invalid email or password" } as ErrorResponse)
 })
 
 // ── Auth guard (protects all /api/* routes except /api/auth/*) ────────────────
-const authEnabled = Boolean(BETA_TOKEN || USERS_RAW)
-if (authEnabled) {
-  app.use("/api", (req, res, next) => {
-    // Always let CORS preflight through.
-    if (req.method === "OPTIONS") { next(); return }
-    // /api/auth/* is public (login endpoint handled above).
-    if (req.path.startsWith("/auth/")) { next(); return }
+// Always installed; passes through when no auth is configured (no env users,
+// no bypass token, no DB users). Becomes active as soon as any auth source exists.
+app.use("/api", (req, res, next) => {
+  // Always let CORS preflight through.
+  if (req.method === "OPTIONS") { next(); return }
+  // /api/auth/* is public (login/register endpoints handled above).
+  if (req.path.startsWith("/auth/")) { next(); return }
 
-    // 1. Accept JWT issued by /api/auth/login (Authorization: Bearer <token>)
-    const authHeader = req.headers["authorization"]
-    if (authHeader?.startsWith("Bearer ")) {
-      const payload = verifyJwt(authHeader.slice(7))
-      if (payload) { next(); return }
-    }
+  // If no auth sources exist at all, allow the request through.
+  if (!BETA_TOKEN && !USERS_RAW && !dbHasUsers()) { next(); return }
 
-    // 2. Accept bypass token (X-Beta-Token header — set by ?bypass= URL param on frontend)
-    if (BETA_TOKEN && req.headers["x-beta-token"] === BETA_TOKEN) {
-      next(); return
-    }
+  // 1. Accept JWT issued by /api/auth/login (Authorization: Bearer <token>)
+  const authHeader = req.headers["authorization"]
+  if (authHeader?.startsWith("Bearer ")) {
+    const payload = verifyJwt(authHeader.slice(7))
+    if (payload) { next(); return }
+  }
 
-    logger.warn({ url: req.url }, "rejected request: missing or invalid auth")
-    res.status(401).json({ error: "Unauthorized" } as ErrorResponse)
-  })
-  logger.info({ hasUsers: Boolean(USERS_RAW), hasBypass: Boolean(BETA_TOKEN) }, "auth guard enabled")
-}
+  // 2. Accept bypass token (X-Beta-Token header — set by ?bypass= URL param on frontend)
+  if (BETA_TOKEN && req.headers["x-beta-token"] === BETA_TOKEN) {
+    next(); return
+  }
+
+  logger.warn({ url: req.url }, "rejected request: missing or invalid auth")
+  res.status(401).json({ error: "Unauthorized" } as ErrorResponse)
+})
+logger.info({ hasEnvUsers: Boolean(USERS_RAW), hasBypass: Boolean(BETA_TOKEN) }, "auth guard installed")
 
 // ── POST /api/render ──────────────────────────────────────────────────────────
 app.post("/api/render", async (req, res) => {
