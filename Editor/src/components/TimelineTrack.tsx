@@ -275,10 +275,13 @@ type Props = {
   goals: GoalEvent[]
   selectedClipId: string | null
   introSelected: boolean
+  outroSelected: boolean
   currentReelTime: number
   introDurationSeconds: number
+  outroDurationSeconds: number
   onSelectClip: (id: string) => void
   onSelectIntro: () => void
+  onSelectOutro: () => void
   onTrimIntro: (newDuration: number) => void
   onReorder: (from: number, to: number) => void
   onTrimClip: (clipId: string, trimStart: number, trimEnd: number) => void
@@ -296,10 +299,13 @@ export function TimelineTrack({
   goals,
   selectedClipId,
   introSelected,
+  outroSelected,
   currentReelTime,
   introDurationSeconds,
+  outroDurationSeconds,
   onSelectClip,
   onSelectIntro,
+  onSelectOutro,
   onTrimIntro,
   onReorder,
   onTrimClip,
@@ -323,11 +329,12 @@ export function TimelineTrack({
   }, [goals])
 
   const introDuration = introDurationSeconds
+  const outroDuration = outroDurationSeconds
   const clipsTrimmedDuration = clips.reduce(
     (s, c) => s + Math.max(0, c.trimEnd - c.trimStart),
     0
   )
-  const totalReelDuration = introDuration + clipsTrimmedDuration
+  const totalReelDuration = introDuration + clipsTrimmedDuration + outroDuration
   const timelineWidthPx = Math.max(totalReelDuration * pxPerSec, 320)
 
   const goalMarkers = buildGoalMarkers(goals, clips, introDuration)
@@ -462,6 +469,27 @@ export function TimelineTrack({
               </div>
             </SortableContext>
           </DndContext>
+
+          {/* Outro block */}
+          {outroDuration > 0 && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onSelectOutro() }}
+              className={`relative flex shrink-0 flex-col overflow-hidden rounded-lg border transition-colors ${
+                outroSelected
+                  ? "border-yellow-500 ring-1 ring-yellow-500/40"
+                  : "border-purple-800 hover:border-purple-600"
+              } bg-purple-950/60`}
+              style={{ width: Math.max(32, (outroDuration / totalReelDuration) * timelineWidthPx) }}
+            >
+              <div className="flex h-8 w-full items-center justify-center bg-purple-900/30">
+                <span className="text-[10px] font-bold tracking-wide text-purple-300">OUTRO</span>
+              </div>
+              <div className="flex items-center justify-center px-1.5 py-1">
+                <span className="text-[10px] tabular-nums text-purple-400">{outroDuration.toFixed(1)}s</span>
+              </div>
+            </button>
+          )}
         </div>
 
         {/* Goal markers */}

@@ -373,6 +373,17 @@ export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
         <LowerThirdsOverlay {...(props.lowerThirds ?? {})} />
       </Sequence>
 
+      {/* Primary sponsor logo — bottom-right corner on clip frames */}
+      {props.outro?.sponsorLogoUrls?.[0] && introDurationFrames < totalReelFrames && (() => {
+        const outroDur = props.outro?.durationSeconds ? Math.ceil(props.outro.durationSeconds * fps) : 0;
+        const clipFrames = totalReelFrames - introDurationFrames - outroDur;
+        return clipFrames > 0 ? (
+          <Sequence from={introDurationFrames} durationInFrames={clipFrames} name="Sponsor" layout="none">
+            <SponsorLogoOverlay src={props.outro!.sponsorLogoUrls![0]} />
+          </Sequence>
+        ) : null;
+      })()}
+
       {/* Outro card — shown after all clips */}
       {props.outro && props.outro.durationSeconds > 0 && (() => {
         const outroDurationFrames = Math.ceil(props.outro.durationSeconds * fps);

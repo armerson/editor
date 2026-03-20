@@ -86,6 +86,7 @@ export default function App() {
   const [clips, setClips] = useState<Clip[]>([])
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null)
   const [introSelected, setIntroSelected] = useState(false)
+  const [outroSelected, setOutroSelected] = useState(false)
   const [isPlayingReel, setIsPlayingReel] = useState(false)
   const [showIntroCard, setShowIntroCard] = useState(false)
   const [introEnabled, setIntroEnabled] = useState(true)
@@ -178,8 +179,9 @@ export default function App() {
   /** True when the selected clip is a "normal" gameplay clip (not intro/outro). */
   const isNormalClip = !selectedClip?.role || selectedClip.role === "normal"
   const effectiveIntroDuration = introEnabled ? intro.durationSeconds : 0
+  const effectiveOutroDuration = outro.enabled ? outro.durationSeconds : 0
   const totalReelDuration =
-    effectiveIntroDuration + clips.reduce((s, c) => s + Math.max(0, c.trimEnd - c.trimStart), 0)
+    effectiveIntroDuration + clips.reduce((s, c) => s + Math.max(0, c.trimEnd - c.trimStart), 0) + effectiveOutroDuration
   // Keep ref in sync so the RAF loop always has the latest value.
   totalReelDurationRef.current = totalReelDuration
 
@@ -524,11 +526,15 @@ export default function App() {
   }
 
   const handleSelectClip = (id: string) => {
-    setIsPlayingReel(false); setShowIntroCard(false); setSelectedClipId(id); setIntroSelected(false); audioRef.current?.pause()
+    setIsPlayingReel(false); setShowIntroCard(false); setSelectedClipId(id); setIntroSelected(false); setOutroSelected(false); audioRef.current?.pause()
   }
 
   const handleSelectIntro = () => {
-    setIsPlayingReel(false); setShowIntroCard(false); setSelectedClipId(null); setIntroSelected(true); audioRef.current?.pause()
+    setIsPlayingReel(false); setShowIntroCard(false); setSelectedClipId(null); setIntroSelected(true); setOutroSelected(false); audioRef.current?.pause()
+  }
+
+  const handleSelectOutro = () => {
+    setIsPlayingReel(false); setShowIntroCard(false); setSelectedClipId(null); setIntroSelected(false); setOutroSelected(true); audioRef.current?.pause()
   }
 
   const updateIntroDuration = (newDuration: number) => {
@@ -1391,6 +1397,18 @@ export default function App() {
                   <ScoreboardOverlay scoreboard={scoreboard} minuteMarker={selectedClip.minuteMarker ?? ""} goals={goals} clips={clips} clipId={selectedClip.id} currentTimeInClip={videoCurrentTime} showScorerAfterGoal={selectedClip.showScorerAfterGoal} />
                 )}
 
+                {/* Primary sponsor logo — bottom-right corner during clip playback */}
+                {outro.sponsorLogoUrls[0] && selectedClip?.url && !(isPlayingReel && showIntroCard) && (
+                  <div style={{
+                    position: "absolute", bottom: 10, right: 10,
+                    background: "rgba(0,0,0,0.45)", borderRadius: 6, padding: "4px 6px",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    pointerEvents: "none",
+                  }}>
+                    <img src={outro.sponsorLogoUrls[0]} alt="Sponsor" style={{ height: 40, maxWidth: 100, objectFit: "contain" }} />
+                  </div>
+                )}
+
               </div>
             </div>
 
@@ -1405,9 +1423,11 @@ export default function App() {
                 </p>
               </div>
               <TimelineTrack clips={clips} goals={goals} selectedClipId={selectedClipId}
-                introSelected={introSelected}
-                currentReelTime={currentReelTime} introDurationSeconds={effectiveIntroDuration}
-                onSelectClip={handleSelectClip} onSelectIntro={handleSelectIntro}
+                introSelected={introSelected} outroSelected={outroSelected}
+                currentReelTime={currentReelTime}
+                introDurationSeconds={effectiveIntroDuration}
+                outroDurationSeconds={effectiveOutroDuration}
+                onSelectClip={handleSelectClip} onSelectIntro={handleSelectIntro} onSelectOutro={handleSelectOutro}
                 onTrimIntro={updateIntroDuration}
                 onReorder={handleReorderClips}
                 onTrimClip={updateClipTrim} onAddGoalAtReelTime={handleAddGoalAtReelTime} />
