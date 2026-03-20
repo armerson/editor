@@ -448,7 +448,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
           <Img
             src={sponsorLogoUrl}
             delayRenderTimeoutInMilliseconds={IMG_TIMEOUT_MS}
-            style={{ height: Math.round(60 * s), maxWidth: Math.round(240 * s), objectFit: 'contain', opacity: 0.75 }}
+            style={{ height: Math.round(120 * s), maxWidth: Math.round(480 * s), objectFit: 'contain', opacity: 0.85 }}
           />
         </div>
       )}

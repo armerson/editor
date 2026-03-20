@@ -320,7 +320,7 @@ export function IntroCard({ intro, className = "" }: Props) {
           <img
             src={intro.sponsorLogoUrl}
             alt="Sponsor"
-            style={{ height: 32, maxWidth: 120, objectFit: "contain", opacity: 0.8 }}
+            style={{ height: 64, maxWidth: 220, objectFit: "contain", opacity: 0.8 }}
           />
         </div>
       )}

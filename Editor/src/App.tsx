@@ -1301,6 +1301,18 @@ export default function App() {
                 {selectedClip?.url && isNormalClip && selectedClip.showScoreboard && !(isPlayingReel && showIntroCard) && (
                   <ScoreboardOverlay scoreboard={scoreboard} minuteMarker={selectedClip.minuteMarker ?? ""} goals={goals} clips={clips} clipId={selectedClip.id} currentTimeInClip={videoCurrentTime} showScorerAfterGoal={selectedClip.showScorerAfterGoal} />
                 )}
+
+                {/* Sponsor logo — bottom-right corner during clip playback */}
+                {intro.sponsorLogoUrl && selectedClip?.url && !(isPlayingReel && showIntroCard) && (
+                  <div style={{
+                    position: "absolute", bottom: 10, right: 10,
+                    background: "rgba(0,0,0,0.45)", borderRadius: 6, padding: "4px 6px",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    pointerEvents: "none",
+                  }}>
+                    <img src={intro.sponsorLogoUrl} alt="Sponsor" style={{ height: 40, maxWidth: 100, objectFit: "contain" }} />
+                  </div>
+                )}
               </div>
             </div>
 
