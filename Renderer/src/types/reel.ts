@@ -127,10 +127,22 @@ export type LowerThirdsOverlayData = {
   imageUrl?: string;
 };
 
+/** Outro card shown at the end of the reel */
+export type OutroCardData = {
+  /** Final score string, e.g. "2 – 1" */
+  finalScore?: string;
+  /** Up to 8 sponsor logo URLs */
+  sponsorLogoUrls?: string[];
+  /** Duration in seconds */
+  durationSeconds: number;
+};
+
 /** Full highlight reel input — matches editor export shape */
 export type HighlightReelData = {
   /** Intro card shown first */
   intro: IntroCardData;
+  /** Outro card shown last */
+  outro?: OutroCardData;
   /** Ordered list of video clips */
   clips: ClipData[];
   /** Goal events (used for cumulative scoreboard) */

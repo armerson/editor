@@ -258,21 +258,6 @@ export function IntroCard({ intro, className = "" }: Props) {
           fontFamily: "system-ui, -apple-system, sans-serif",
         }}
       >
-        {intro.score && (
-          <p
-            style={{
-              fontSize: 36,
-              fontWeight: 800,
-              color: "#facc15",
-              margin: 0,
-              lineHeight: 1,
-              letterSpacing: -0.5,
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            {intro.score}
-          </p>
-        )}
         {intro.matchDate && (
           <p style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", margin: 0 }}>
             {intro.matchDate}
@@ -302,28 +287,6 @@ export function IntroCard({ intro, className = "" }: Props) {
         </p>
       </div>
 
-      {/* Sponsor logo — bottom of card */}
-      {intro.sponsorLogoUrl && (
-        <div
-          style={{
-            animation: anim.subtitle,
-            marginTop: 16,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 4,
-          }}
-        >
-          <p style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", margin: 0, letterSpacing: 1, textTransform: "uppercase", fontFamily: "system-ui, sans-serif" }}>
-            Sponsored by
-          </p>
-          <img
-            src={intro.sponsorLogoUrl}
-            alt="Sponsor"
-            style={{ height: 64, maxWidth: 220, objectFit: "contain", opacity: 0.8 }}
-          />
-        </div>
-      )}
     </div>
   )
 }

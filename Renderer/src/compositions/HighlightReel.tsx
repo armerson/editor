@@ -2,6 +2,7 @@ import React from 'react';
 import { AbsoluteFill, Img, Sequence, Audio, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
 import type { GoalEvent, HighlightReelData } from '../types/reel';
 import { IntroCard } from '../components/IntroCard';
+import { OutroCard } from '../components/OutroCard';
 import { ClipSegment } from '../components/ClipSegment';
 import { ScoreboardOverlay } from '../components/ScoreboardOverlay';
 import { LowerThirdsOverlay } from '../components/LowerThirdsOverlay';
@@ -256,6 +257,8 @@ export function getHighlightReelDurationInFrames(props: HighlightReelProps): num
   for (const clip of clips) {
     total += Math.ceil(getClipDurationSeconds(clip) * fps);
   }
+  const outroDuration = props.outro?.durationSeconds ?? 0;
+  if (outroDuration > 0) total += Math.ceil(outroDuration * fps);
   return total;
 }
 
@@ -370,12 +373,22 @@ export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
         <LowerThirdsOverlay {...(props.lowerThirds ?? {})} />
       </Sequence>
 
-      {/* Sponsor logo — bottom-right corner, shown only on clip frames (not intro) */}
-      {props.intro?.sponsorLogoUrl && introDurationFrames < totalReelFrames && (
-        <Sequence from={introDurationFrames} durationInFrames={totalReelFrames - introDurationFrames} name="Sponsor" layout="none">
-          <SponsorLogoOverlay src={props.intro.sponsorLogoUrl} />
-        </Sequence>
-      )}
+      {/* Outro card — shown after all clips */}
+      {props.outro && props.outro.durationSeconds > 0 && (() => {
+        const outroDurationFrames = Math.ceil(props.outro.durationSeconds * fps);
+        const outroStartFrame = totalReelFrames - outroDurationFrames;
+        return (
+          <Sequence from={outroStartFrame} durationInFrames={outroDurationFrames} name="Outro">
+            <OutroCard
+              finalScore={props.outro.finalScore}
+              sponsorLogoUrls={props.outro.sponsorLogoUrls}
+              durationSeconds={props.outro.durationSeconds}
+              durationFrames={outroDurationFrames}
+              fps={fps}
+            />
+          </Sequence>
+        );
+      })()}
     </AbsoluteFill>
   );
 };

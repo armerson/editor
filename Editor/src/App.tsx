@@ -30,11 +30,13 @@ import type {
   ClipRole,
   GoalEvent,
   IntroData,
+  OutroData,
   ProjectData,
   RenderState,
   ScoreboardData,
 } from "./types"
 import { IntroCard } from "./components/IntroCard"
+import { OutroCard } from "./components/OutroCard"
 import { ScoreboardOverlay } from "./components/ScoreboardOverlay"
 import { AspectRatioPicker } from "./components/AspectRatioPicker"
 import { ValidationPanel } from "./components/ValidationPanel"
@@ -59,14 +61,19 @@ const SAVE_LOAD_STATUS_DURATION_MS = 3000
 const DEFAULT_INTRO: IntroData = {
   teamName: "Ambassadors FC",
   opponent: "",
-  score: "",
   matchDate: "",
   ageGroup: "",
   competition: "",
-  sponsorLogoUrl: "",
   homeBadgeUrl: "",
   awayBadgeUrl: "",
   durationSeconds: 3,
+}
+
+const DEFAULT_OUTRO: OutroData = {
+  enabled: true,
+  finalScore: "",
+  sponsorLogoUrls: [],
+  durationSeconds: 5,
 }
 
 const ASPECT_RATIO_CLASS: Record<AspectRatioPreset, string> = {
@@ -83,6 +90,7 @@ export default function App() {
   const [showIntroCard, setShowIntroCard] = useState(false)
   const [introEnabled, setIntroEnabled] = useState(true)
   const [intro, setIntro] = useState<IntroData>(() => ({ ...DEFAULT_INTRO }))
+  const [outro, setOutro] = useState<OutroData>(() => ({ ...DEFAULT_OUTRO }))
   const [scoreboard, setScoreboard] = useState<ScoreboardData>(() => ({
     homeTeamName: DEFAULT_INTRO.teamName,
     awayTeamName: "",
@@ -120,7 +128,7 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const homeBadgeInputRef = useRef<HTMLInputElement | null>(null)
   const awayBadgeInputRef = useRef<HTMLInputElement | null>(null)
-  const sponsorLogoInputRef = useRef<HTMLInputElement | null>(null)
+  const sponsorLogoInputRefs = useRef<Array<HTMLInputElement | null>>(Array(8).fill(null))
   const musicInputRef = useRef<HTMLInputElement | null>(null)
   // videoRef always points to whichever video is currently active/visible
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -201,9 +209,13 @@ export default function App() {
         ...intro,
         homeBadgeUrl: intro.homeBadgeUrl.startsWith("http") ? intro.homeBadgeUrl : "",
         awayBadgeUrl: intro.awayBadgeUrl.startsWith("http") ? intro.awayBadgeUrl : "",
-        sponsorLogoUrl: intro.sponsorLogoUrl.startsWith("http") ? intro.sponsorLogoUrl : "",
         // durationSeconds: 0 signals the renderer to skip the intro entirely.
         durationSeconds: introEnabled ? intro.durationSeconds : 0,
+      },
+      outro: {
+        ...outro,
+        sponsorLogoUrls: outro.sponsorLogoUrls.filter((u) => u.startsWith("http")),
+        durationSeconds: outro.enabled ? outro.durationSeconds : 0,
       },
       scoreboard: { ...scoreboard },
       goals: [...goals],
@@ -261,6 +273,13 @@ export default function App() {
       homeBadgeUrl: rawIntro.homeBadgeUrl ?? rawIntro.clubBadgeUrl ?? "",
       awayBadgeUrl: rawIntro.awayBadgeUrl ?? "",
     })
+    if (project.outro) {
+      setOutro({
+        ...DEFAULT_OUTRO,
+        ...project.outro,
+        enabled: (project.outro.durationSeconds ?? 1) > 0,
+      })
+    }
     setScoreboard(project.scoreboard)
     setGoals(project.goals)
     const musicUrl = project.music.musicUrl
@@ -593,7 +612,7 @@ export default function App() {
 
   const uploadBadge = async (
     file: File,
-    field: "homeBadgeUrl" | "awayBadgeUrl" | "sponsorLogoUrl",
+    field: "homeBadgeUrl" | "awayBadgeUrl",
     e: ChangeEvent<HTMLInputElement>
   ) => {
     if (isFirebaseConfigured()) {
@@ -623,9 +642,36 @@ export default function App() {
     void uploadBadge(file, "awayBadgeUrl", e)
   }
 
-  const handleSponsorLogoUpload = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleSponsorLogoUpload = async (index: number, e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return
-    void uploadBadge(file, "sponsorLogoUrl", e)
+    let url: string
+    if (isFirebaseConfigured()) {
+      try {
+        url = await uploadMediaToStorage("badge", file, crypto.randomUUID())
+        toast("Sponsor uploaded")
+      } catch {
+        url = URL.createObjectURL(file)
+        toast("Upload failed – local preview only")
+      }
+    } else {
+      url = URL.createObjectURL(file)
+    }
+    setOutro((prev) => {
+      const next = [...prev.sponsorLogoUrls]
+      if (next[index]) URL.revokeObjectURL(next[index])
+      next[index] = url
+      return { ...prev, sponsorLogoUrls: next }
+    })
+    e.target.value = ""
+  }
+
+  const handleRemoveSponsorLogo = (index: number) => {
+    setOutro((prev) => {
+      const next = [...prev.sponsorLogoUrls]
+      if (next[index]) URL.revokeObjectURL(next[index])
+      next.splice(index, 1)
+      return { ...prev, sponsorLogoUrls: next }
+    })
   }
 
   const handleMusicUpload = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -982,15 +1028,9 @@ export default function App() {
               <div className="shrink-0 rounded-lg bg-black p-1">
                 <img src="/logo.png" alt="QuickCut Match" className="h-10 w-auto" />
               </div>
-              <div className="flex items-baseline gap-3">
-                <h1 className="shrink-0 text-lg font-bold leading-none">
-                  Ambassadors FC
-                  <span className="ml-1.5 font-normal text-neutral-400">Highlight Editor</span>
-                </h1>
-                <input type="text" value={projectTitle} onChange={(e) => setProjectTitle(e.target.value)}
-                  className="min-w-0 max-w-[200px] border-0 border-b border-transparent bg-transparent px-0 text-sm text-neutral-400 focus:border-neutral-600 focus:outline-none"
-                  placeholder="Project title" />
-              </div>
+              <input type="text" value={projectTitle} onChange={(e) => setProjectTitle(e.target.value)}
+                className="min-w-0 max-w-[240px] border-0 border-b border-transparent bg-transparent px-0 text-sm text-neutral-400 focus:border-neutral-600 focus:outline-none"
+                placeholder="Project title" />
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
@@ -1091,7 +1131,9 @@ export default function App() {
           <input ref={fileInputRef} type="file" accept="video/*" multiple className="hidden" onChange={handleFilesSelected} />
           <input ref={homeBadgeInputRef} type="file" accept="image/*" className="hidden" onChange={handleHomeBadgeUpload} />
           <input ref={awayBadgeInputRef} type="file" accept="image/*" className="hidden" onChange={handleAwayBadgeUpload} />
-          <input ref={sponsorLogoInputRef} type="file" accept="image/*" className="hidden" onChange={handleSponsorLogoUpload} />
+          {Array.from({ length: 8 }).map((_, i) => (
+            <input key={i} ref={(el) => { sponsorLogoInputRefs.current[i] = el }} type="file" accept="image/*" className="hidden" onChange={(e) => handleSponsorLogoUpload(i, e)} />
+          ))}
           <input ref={musicInputRef} type="file" accept="audio/*" className="hidden" onChange={handleMusicUpload} />
 
           {/* Clip list */}
@@ -1140,7 +1182,6 @@ export default function App() {
               {[
                 { label: "Team name", key: "teamName" as const, placeholder: "Ambassadors FC" },
                 { label: "Opponent", key: "opponent" as const, placeholder: "Rivals United" },
-                { label: "Score", key: "score" as const, placeholder: "2-1" },
                 { label: "Match date", key: "matchDate" as const, placeholder: "11 Mar 2026" },
                 { label: "Age group", key: "ageGroup" as const, placeholder: "U12" },
                 { label: "Competition", key: "competition" as const, placeholder: "Premier League" },
@@ -1179,25 +1220,6 @@ export default function App() {
                   </div>
                 </div>
               </div>
-              {/* Sponsor logo */}
-              <div>
-                <label className="mb-1 block text-[10px] font-medium text-neutral-400">Sponsor logo</label>
-                <p className="mb-1.5 text-[9px] text-neutral-500">Shown on the intro card and as a corner overlay on clips</p>
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={() => sponsorLogoInputRef.current?.click()}
-                    className="rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-xs hover:bg-neutral-700">
-                    {intro.sponsorLogoUrl ? "Change" : "Upload"}
-                  </button>
-                  {intro.sponsorLogoUrl && (
-                    <>
-                      <img src={intro.sponsorLogoUrl} alt="Sponsor" className="h-8 w-16 rounded border border-neutral-600 object-contain bg-neutral-800" />
-                      <button type="button" onClick={() => setIntro((p) => ({ ...p, sponsorLogoUrl: "" }))}
-                        className="text-[10px] text-neutral-500 hover:text-red-400">Remove</button>
-                    </>
-                  )}
-                </div>
-              </div>
-
               <div>
                 <label className="mb-1 block text-[10px] font-medium text-neutral-400">Intro duration (s)</label>
                 <input type="number" min={1} max={10} step={0.5} value={intro.durationSeconds}
@@ -1231,6 +1253,68 @@ export default function App() {
               </div>
             </div>
           </div>
+
+          {/* Outro */}
+          <div className="mb-4 rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-neutral-200">Outro</h2>
+              <label className="flex cursor-pointer items-center gap-2">
+                <span className="text-[10px] text-neutral-400">{outro.enabled ? "Enabled" : "Disabled"}</span>
+                <button type="button" onClick={() => setOutro((v) => ({ ...v, enabled: !v.enabled }))}
+                  className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${outro.enabled ? "bg-yellow-500" : "bg-neutral-600"}`}>
+                  <span className={`inline-block h-3 w-3 rounded-full bg-white shadow transition-transform ${outro.enabled ? "translate-x-4" : "translate-x-0.5"}`} />
+                </button>
+              </label>
+            </div>
+            <div className={`space-y-3 ${outro.enabled ? "" : "pointer-events-none opacity-40"}`}>
+              <div>
+                <label className="mb-1 block text-[10px] font-medium text-neutral-400">Final score</label>
+                <input type="text" value={outro.finalScore} onChange={(e) => setOutro((p) => ({ ...p, finalScore: e.target.value }))}
+                  placeholder="2 – 1"
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-xs text-white placeholder-neutral-600 focus:border-neutral-500 focus:outline-none" />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-medium text-neutral-400">Outro duration (s)</label>
+                <input type="number" min={2} max={20} step={0.5} value={outro.durationSeconds}
+                  onChange={(e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) setOutro((p) => ({ ...p, durationSeconds: Math.max(2, Math.min(20, v)) })) }}
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-xs text-white focus:border-neutral-500 focus:outline-none" />
+              </div>
+              <div>
+                <label className="mb-2 block text-[10px] font-medium text-neutral-400">Sponsors (up to 8)</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {Array.from({ length: 8 }).map((_, i) => {
+                    const url = outro.sponsorLogoUrls[i]
+                    return (
+                      <div key={i} className="flex items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-800 p-1.5">
+                        {url ? (
+                          <>
+                            <img src={url} alt={`Sponsor ${i + 1}`} className="h-8 w-12 rounded object-contain" />
+                            <div className="flex flex-col gap-0.5">
+                              <button type="button" onClick={() => sponsorLogoInputRefs.current[i]?.click()}
+                                className="text-[9px] text-neutral-400 hover:text-white">Change</button>
+                              <button type="button" onClick={() => handleRemoveSponsorLogo(i)}
+                                className="text-[9px] text-neutral-500 hover:text-red-400">Remove</button>
+                            </div>
+                          </>
+                        ) : (
+                          <button type="button" onClick={() => sponsorLogoInputRefs.current[i]?.click()}
+                            className="flex w-full items-center justify-center gap-1 py-1 text-[10px] text-neutral-500 hover:text-neutral-300">
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+                            Logo {i + 1}
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+              <div className="overflow-hidden rounded-lg border border-neutral-700">
+                <p className="mb-1 px-2 pt-2 text-[9px] text-neutral-500">Outro preview</p>
+                <OutroCard outro={outro} />
+              </div>
+            </div>
+          </div>
+
           </div>{/* end full sidebar content */}
         </aside>
 
@@ -1307,17 +1391,6 @@ export default function App() {
                   <ScoreboardOverlay scoreboard={scoreboard} minuteMarker={selectedClip.minuteMarker ?? ""} goals={goals} clips={clips} clipId={selectedClip.id} currentTimeInClip={videoCurrentTime} showScorerAfterGoal={selectedClip.showScorerAfterGoal} />
                 )}
 
-                {/* Sponsor logo — bottom-right corner during clip playback */}
-                {intro.sponsorLogoUrl && selectedClip?.url && !(isPlayingReel && showIntroCard) && (
-                  <div style={{
-                    position: "absolute", bottom: 10, right: 10,
-                    background: "rgba(0,0,0,0.45)", borderRadius: 6, padding: "4px 6px",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    pointerEvents: "none",
-                  }}>
-                    <img src={intro.sponsorLogoUrl} alt="Sponsor" style={{ height: 40, maxWidth: 100, objectFit: "contain" }} />
-                  </div>
-                )}
               </div>
             </div>
 

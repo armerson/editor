@@ -7,6 +7,7 @@
 import type {
   HighlightReelData,
   IntroCardData,
+  OutroCardData,
   ClipData,
   MusicTrackData,
   ScoreboardOverlayData,
@@ -77,12 +78,22 @@ export type ProjectMusic = {
   [key: string]: unknown
 }
 
+/** Project JSON outro shape */
+export type ProjectOutro = {
+  enabled?: boolean
+  finalScore?: string
+  sponsorLogoUrls?: string[]
+  durationSeconds?: number
+  [key: string]: unknown
+}
+
 /** Project JSON root (editor export) */
 export type ProjectJson = {
   version?: number
   projectTitle?: string
   clips?: ProjectClip[]
   intro?: ProjectIntro
+  outro?: ProjectOutro
   scoreboard?: ProjectScoreboard
   music?: ProjectMusic
   lowerThird?: Record<string, unknown>
@@ -314,8 +325,21 @@ export function projectJsonToHighlightReelData(
 
   const goals = parseGoals(project.goals)
 
+  let outro: OutroCardData | undefined
+  const po = project.outro
+  if (po && typeof po.durationSeconds === "number" && po.durationSeconds > 0) {
+    outro = {
+      finalScore: typeof po.finalScore === "string" ? po.finalScore : undefined,
+      sponsorLogoUrls: Array.isArray(po.sponsorLogoUrls)
+        ? po.sponsorLogoUrls.filter((u): u is string => typeof u === "string" && u.trim().length > 0)
+        : [],
+      durationSeconds: po.durationSeconds,
+    }
+  }
+
   return {
     intro,
+    outro,
     clips,
     goals,
     music,

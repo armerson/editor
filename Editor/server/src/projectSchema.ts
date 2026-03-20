@@ -27,12 +27,12 @@ export const ProjectSchema = z.object({
   intro: z.object({
     teamName: z.string(),
     opponent: z.string(),
-    score: z.string(),
+    score: z.string().optional(),
     matchDate: z.string(),
     ageGroup: z.string(),
     /** Competition / tournament name, e.g. "Premier League". */
     competition: z.string().optional(),
-    /** Sponsor logo URL — corner overlay on clip frames. May be empty string. */
+    /** Sponsor logo URL — legacy field, kept for backward compat. */
     sponsorLogoUrl: z.string().optional(),
     /** Legacy single-badge field — kept for backward compat. Renderer should prefer homeBadgeUrl. */
     clubBadgeUrl: z.string().optional(),
@@ -42,6 +42,12 @@ export const ProjectSchema = z.object({
     awayBadgeUrl: z.string().optional(),
     durationSeconds: z.number(),
   }),
+  outro: z.object({
+    enabled: z.boolean().optional(),
+    finalScore: z.string().optional(),
+    sponsorLogoUrls: z.array(z.string()).optional(),
+    durationSeconds: z.number(),
+  }).optional(),
   scoreboard: z.object({
     homeTeamName: z.string(),
     awayTeamName: z.string(),
