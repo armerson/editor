@@ -12,18 +12,47 @@ const SPONSOR_IMG_TIMEOUT_MS = 90_000;
 
 const SponsorLogoOverlay: React.FC<{ src: string }> = ({ src }) => {
   const { width, height } = useVideoConfig();
-  const s = Math.min(width, height) / 1080;
-  const logoPx = Math.round(168 * s);
-  const pad = Math.round(24 * s);
+  const isWidescreen = width / height > 1.5; // 16:9
+
+  if (isWidescreen) {
+    const s = height / 1080;
+    const logoPx = Math.round(168 * s);
+    const pad = Math.round(24 * s);
+    return (
+      <AbsoluteFill style={{ pointerEvents: 'none' }}>
+        <div style={{
+          position: 'absolute',
+          bottom: pad,
+          right: pad,
+          background: 'rgba(0,0,0,0.45)',
+          borderRadius: Math.round(8 * s),
+          padding: Math.round(6 * s),
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <Img
+            src={src}
+            delayRenderTimeoutInMilliseconds={SPONSOR_IMG_TIMEOUT_MS}
+            style={{ height: logoPx, maxWidth: Math.round(logoPx * 2.5), objectFit: 'contain' }}
+          />
+        </div>
+      </AbsoluteFill>
+    );
+  }
+
+  // 1:1 or 9:16 — centre the logo in the bottom black bar
+  const videoHeight = Math.round(width * 9 / 16);
+  const blackBarHeight = Math.round((height - videoHeight) / 2);
+  const logoPx = Math.round(blackBarHeight * 0.65);
   return (
     <AbsoluteFill style={{ pointerEvents: 'none' }}>
       <div style={{
         position: 'absolute',
-        bottom: pad,
-        right: pad,
-        background: 'rgba(0,0,0,0.45)',
-        borderRadius: Math.round(8 * s),
-        padding: Math.round(6 * s),
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: blackBarHeight,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -31,7 +60,7 @@ const SponsorLogoOverlay: React.FC<{ src: string }> = ({ src }) => {
         <Img
           src={src}
           delayRenderTimeoutInMilliseconds={SPONSOR_IMG_TIMEOUT_MS}
-          style={{ height: logoPx, maxWidth: Math.round(logoPx * 2.5), objectFit: 'contain' }}
+          style={{ height: logoPx, maxWidth: Math.round(width * 0.55), objectFit: 'contain' }}
         />
       </div>
     </AbsoluteFill>
