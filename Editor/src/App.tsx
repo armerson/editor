@@ -1059,7 +1059,7 @@ export default function App() {
           <div className="min-w-0">
             <div className="flex items-center gap-4">
               <div className="shrink-0 rounded-lg bg-black p-1">
-                <img src="/logo.png" alt="QuickCut Match" className="h-10 w-auto" />
+                <img src="/logo.png" alt="QuickCut Match" className="h-16 w-auto" />
               </div>
               <input type="text" value={projectTitle} onChange={(e) => setProjectTitle(e.target.value)}
                 className="min-w-0 max-w-[240px] border-0 border-b border-transparent bg-transparent px-0 text-sm text-neutral-400 focus:border-neutral-600 focus:outline-none"
