@@ -30,6 +30,10 @@ export const ProjectSchema = z.object({
     score: z.string(),
     matchDate: z.string(),
     ageGroup: z.string(),
+    /** Competition / tournament name, e.g. "Premier League". */
+    competition: z.string().optional(),
+    /** Sponsor logo URL — corner overlay on clip frames. May be empty string. */
+    sponsorLogoUrl: z.string().optional(),
     /** Legacy single-badge field — kept for backward compat. Renderer should prefer homeBadgeUrl. */
     clubBadgeUrl: z.string().optional(),
     /** Home club badge (new). Takes precedence over clubBadgeUrl. */
