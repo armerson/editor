@@ -1199,6 +1199,25 @@ export default function App() {
             )}
           </div>
 
+          {/* Match Day Sponsor */}
+          <div className="mb-4 rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+            <h2 className="mb-3 text-sm font-semibold text-neutral-200">Match Day Sponsor</h2>
+            <p className="mb-2 text-[10px] text-neutral-500">Logo shown in the corner during playback</p>
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={() => sponsorLogoInputRefs.current[0]?.click()}
+                className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs text-neutral-200 hover:bg-neutral-700">
+                {outro.sponsorLogoUrls[0] ? "Change" : "Upload logo"}
+              </button>
+              {outro.sponsorLogoUrls[0] && (
+                <>
+                  <img src={outro.sponsorLogoUrls[0]} alt="Sponsor" className="h-10 max-w-[80px] rounded border border-neutral-700 bg-neutral-800 object-contain p-1" />
+                  <button type="button" onClick={() => handleRemoveSponsorLogo(0)}
+                    className="text-[10px] text-neutral-500 hover:text-red-400">Remove</button>
+                </>
+              )}
+            </div>
+          </div>
+
           {/* Match & Intro */}
           <div className="mb-4 rounded-xl border border-neutral-800 bg-neutral-900 p-4">
             <div className="mb-3 flex items-center justify-between">
