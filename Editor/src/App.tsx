@@ -795,19 +795,15 @@ export default function App() {
 
     if (isPlayingReel) {
       // Derive reel time directly from the video position — eliminates timer drift
-      const clipIdx = clips.findIndex((c) => c.id === selectedClip.id)
-      if (clipIdx !== -1) {
-        const offsetBefore =
-          effectiveIntroDuration +
-          clips.slice(0, clipIdx).reduce((s, c) => s + Math.max(0, c.trimEnd - c.trimStart), 0)
-        const reelT = offsetBefore + Math.max(0, vt - selectedClip.trimStart)
+      const reelIdx = reelPlaybackOrder.findIndex((c) => c.id === selectedClip.id)
+      if (reelIdx !== -1) {
+        const reelT = (reelClipStartTimes[reelIdx] ?? 0) + Math.max(0, vt - selectedClip.trimStart)
         setCurrentReelTime(reelT)
         console.debug("[reel]", selectedClip.id.slice(0, 8), "vt:", vt.toFixed(2), "→ reelT:", reelT.toFixed(2))
       }
-      // Transition at trimEnd
       if (vt >= selectedClip.trimEnd) {
         v.pause()
-        const idx = clips.findIndex((c) => c.id === selectedClip.id)
+        const idx = reelPlaybackOrder.findIndex((c) => c.id === selectedClip.id)
         console.log("[reel] trimEnd at", vt.toFixed(2), "clip idx", idx)
         doTransition(idx + 1)
       }
@@ -816,36 +812,22 @@ export default function App() {
 
   const handleVideoEnded = () => {
     if (!isPlayingReel || !selectedClip) return
-    const idx = clips.findIndex((c) => c.id === selectedClip.id)
+    const idx = reelPlaybackOrder.findIndex((c) => c.id === selectedClip.id)
     console.log("[reel] video ended, clip idx", idx)
     doTransition(idx + 1)
   }
 
   const handlePlayReel = () => {
-    if (clips.length === 0) return
-
-    // Always start from primary
-    activePrimaryRef.current = true
-    videoRef.current = primaryRef.current
-    setActivePrimary(true)
-
-    // Preload clip 0 into primary, clip 1 into buffer
-    if (primaryRef.current && clips[0]) {
-      primaryRef.current.src = clips[0].url
-      primaryRef.current.currentTime = clips[0].trimStart
-    }
-    if (bufferRef.current && clips[1]) {
-      console.log("[reel] preloading clip 1 into buffer on start")
-      bufferRef.current.src = clips[1].url
-      bufferRef.current.currentTime = clips[1].trimStart
-      bufferRef.current.load()
-    }
-
-    // Skip intro card in preview when intro is disabled.
-    setShowIntroCard(introEnabled); setShowOutroCard(false); setIsPlayingReel(true)
-    setSelectedClipId(introEnabled ? null : (clips[0]?.id ?? null)); setCurrentReelTime(0)
-    reelStartTimeRef.current = performance.now()
-    musicStartedThisReelRef.current = false
+    if (reelPlaybackOrder.length === 0 && !introEnabled && !outro.enabled) return
+    activePrimaryRef.current = true; videoRef.current = primaryRef.current; setActivePrimary(true)
+    const firstClip = introRoleClips.length > 0 ? reelPlaybackOrder[0] : (normalClips[0] ?? outroRoleClips[0])
+    if (primaryRef.current && firstClip) { primaryRef.current.src = firstClip.url; primaryRef.current.currentTime = firstClip.trimStart }
+    const secondClip = introRoleClips.length > 0 ? reelPlaybackOrder[1] : (normalClips[1] ?? outroRoleClips[0])
+    if (bufferRef.current && secondClip) { console.log("[reel] preloading clip 1 into buffer on start"); bufferRef.current.src = secondClip.url; bufferRef.current.currentTime = secondClip.trimStart; bufferRef.current.load() }
+    const showIntroNow = introRoleClips.length === 0 && introEnabled
+    setShowIntroCard(showIntroNow); setShowOutroCard(false); setIsPlayingReel(true)
+    setSelectedClipId(showIntroNow ? null : (firstClip?.id ?? null)); setCurrentReelTime(0)
+    reelStartTimeRef.current = performance.now(); musicStartedThisReelRef.current = false
   }
 
   // During non-reel mode, keep audio.volume in sync with the slider.
@@ -917,21 +899,35 @@ export default function App() {
   }, [isPlayingReel, musicTrack, musicStartInReel, musicStartInTrack])
 
   useEffect(() => {
-    if (!isPlayingReel || !showIntroCard || clips.length === 0) return
-    const t = setTimeout(() => { setShowIntroCard(false); setSelectedClipId(clips[0].id) }, effectiveIntroDuration * 1000)
+    if (!isPlayingReel || !showIntroCard) return
+    const firstAfterIntroId = normalClips[0]?.id ?? outroRoleClips[0]?.id
+    const t = setTimeout(() => {
+      setShowIntroCard(false)
+      if (firstAfterIntroId) {
+        setSelectedClipId(firstAfterIntroId)
+      } else if (outro.enabled && outro.durationSeconds > 0) {
+        outroStartTimeRef.current = performance.now(); setShowOutroCard(true)
+      } else {
+        setIsPlayingReel(false)
+      }
+    }, effectiveIntroDuration * 1000)
     return () => clearTimeout(t)
-  }, [isPlayingReel, showIntroCard, clips, effectiveIntroDuration])
+  }, [isPlayingReel, showIntroCard, clips, effectiveIntroDuration, outro.enabled, outro.durationSeconds])
 
   useEffect(() => {
     if (!isPlayingReel || !showOutroCard) return
-    const t = setTimeout(() => { setIsPlayingReel(false); setShowOutroCard(false) }, effectiveOutroDuration * 1000)
+    const firstOutroRoleId = outroRoleClips[0]?.id
+    const t = setTimeout(() => {
+      setShowOutroCard(false)
+      if (firstOutroRoleId) { setSelectedClipId(firstOutroRoleId) }
+      else { setIsPlayingReel(false) }
+    }, effectiveOutroDuration * 1000)
     return () => clearTimeout(t)
-  }, [isPlayingReel, showOutroCard, effectiveOutroDuration])
+  }, [isPlayingReel, showOutroCard, clips, effectiveOutroDuration])
 
-  // When the intro card ends (showIntroCard → false), the primary video was
-  // already loaded in handlePlayReel; just press play.
+  // When the intro/outro card ends, the primary video was already loaded; just press play.
   useEffect(() => {
-    if (!isPlayingReel || showIntroCard) return
+    if (!isPlayingReel || showIntroCard || showOutroCard) return
     const v = videoRef.current
     if (!v) return
     if (v.paused) {
@@ -940,7 +936,7 @@ export default function App() {
       void v.play().catch(() => {})
       console.log("[reel] starting clip after intro:", selectedClip?.id?.slice(0, 8))
     }
-  }, [isPlayingReel, showIntroCard])
+  }, [isPlayingReel, showIntroCard, showOutroCard])
 
   // Manual clip selection (not during reel): always reset to primary and load the clip.
   useEffect(() => {
@@ -962,12 +958,12 @@ export default function App() {
 
   useEffect(() => {
     if (isPlayingReel) return
-    if (!selectedClip || clips.length === 0) { setCurrentReelTime(0); return }
-    const beforeSelected = clips.findIndex((c) => c.id === selectedClip.id)
-    const timeBeforeSelected = effectiveIntroDuration + clips.slice(0, beforeSelected).reduce((s, c) => s + Math.max(0, c.trimEnd - c.trimStart), 0)
+    if (!selectedClip || reelPlaybackOrder.length === 0) { setCurrentReelTime(0); return }
+    const reelIdx = reelPlaybackOrder.findIndex((c) => c.id === selectedClip.id)
+    if (reelIdx === -1) { setCurrentReelTime(0); return }
     const timeInClip = Math.max(0, Math.min(videoCurrentTime - selectedClip.trimStart, selectedClip.trimEnd - selectedClip.trimStart))
-    setCurrentReelTime(timeBeforeSelected + timeInClip)
-  }, [isPlayingReel, selectedClip?.id, videoCurrentTime, clips, effectiveIntroDuration])
+    setCurrentReelTime((reelClipStartTimes[reelIdx] ?? 0) + timeInClip)
+  }, [isPlayingReel, selectedClip?.id, videoCurrentTime, clips, effectiveIntroDuration, effectiveOutroDuration])
 
   useEffect(() => {
     if (!videoRef.current) return
@@ -1462,8 +1458,8 @@ export default function App() {
                   <ScoreboardOverlay scoreboard={scoreboard} minuteMarker={selectedClip.minuteMarker ?? ""} goals={goals} clips={clips} clipId={selectedClip.id} currentTimeInClip={videoCurrentTime} showScorerAfterGoal={selectedClip.showScorerAfterGoal} />
                 )}
 
-                {/* Primary sponsor logo — bottom-right corner during clip playback */}
-                {outro.sponsorLogoUrls[0] && selectedClip?.url && !(isPlayingReel && showIntroCard) && (
+                {/* Primary sponsor logo — bottom-right corner during normal clip playback only */}
+                {outro.sponsorLogoUrls[0] && selectedClip?.url && isNormalClip && !(isPlayingReel && showIntroCard) && (
                   <div style={{
                     position: "absolute", bottom: 10, right: 10,
                     background: "rgba(0,0,0,0.45)", borderRadius: 6, padding: "4px 6px",

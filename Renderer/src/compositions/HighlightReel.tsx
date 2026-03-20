@@ -270,19 +270,51 @@ export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
 
   const allClips = props.clips ?? [];
   const clips = allClips.filter((c) => c.src?.trim());
+
+  // Split by role for ordered playback: intro-role → intro card → normal → outro card → outro-role
+  const introRoleClips = clips.filter(c => c.role === 'intro');
+  const normalClips = clips.filter(c => !c.role || c.role === 'normal');
+  const outroRoleClips = clips.filter(c => c.role === 'outro');
+  const allOrderedClips = [...introRoleClips, ...normalClips, ...outroRoleClips];
+
+  // Build clipStartFrames for allOrderedClips with intro/outro card gaps
   const clipStartFrames: number[] = [];
-  let acc = introDurationFrames;
-  for (let i = 0; i < clips.length; i++) {
-    clipStartFrames.push(acc);
-    acc += Math.ceil(getClipDurationSeconds(clips[i]) * fps);
+  const introRoleClipFrames = introRoleClips.reduce((s, c) => s + Math.ceil(getClipDurationSeconds(c) * fps), 0);
+  const introCardStartFrame = introRoleClipFrames;
+  const outroDurationFrames2 = props.outro?.durationSeconds > 0 ? Math.ceil(props.outro.durationSeconds * fps) : 0;
+  {
+    let acc = 0;
+    // intro-role clips start at 0 (before intro card)
+    for (let i = 0; i < introRoleClips.length; i++) {
+      clipStartFrames.push(acc);
+      acc += Math.ceil(getClipDurationSeconds(introRoleClips[i]) * fps);
+    }
+    // Intro card
+    acc += introDurationFrames;
+    // normal clips
+    for (let i = 0; i < normalClips.length; i++) {
+      clipStartFrames.push(acc);
+      acc += Math.ceil(getClipDurationSeconds(normalClips[i]) * fps);
+    }
+    // Outro card
+    acc += outroDurationFrames2;
+    // outro-role clips
+    for (let i = 0; i < outroRoleClips.length; i++) {
+      clipStartFrames.push(acc);
+      acc += Math.ceil(getClipDurationSeconds(outroRoleClips[i]) * fps);
+    }
   }
 
+  // The frame at which normal clip content begins (used by CumulativeScoreboard)
+  const normalClipsStartFrame = introRoleClipFrames + introDurationFrames;
+
   // ── Diagnostics (captured by server onBrowserLog) ─────────────────────────
-  logOnce(frame, `clips=${clips.length} intro=${introDurationFrames}f total=${acc}f fps=${fps}`)
+  const totalReelFrames = getHighlightReelDurationInFrames(props);
+  logOnce(frame, `clips=${clips.length} intro=${introDurationFrames}f total=${totalReelFrames}f fps=${fps}`)
   logOnce(frame, `scoreboard: home=${props.scoreboard?.homeTeamName ?? '(none)'} ${props.scoreboard?.homeScore ?? 0} – away=${props.scoreboard?.awayTeamName ?? '(none)'} ${props.scoreboard?.awayScore ?? 0} visible=${props.scoreboard?.visible ?? false}`)
   logOnce(frame, `goals=${props.goals?.length ?? 0} clipAudioOn=${props.music?.clipAudioOn ?? false}`)
-  for (let i = 0; i < clips.length; i++) {
-    const c = clips[i];
+  for (let i = 0; i < allOrderedClips.length; i++) {
+    const c = allOrderedClips[i];
     logOnce(frame, `clip[${i + 1}] "${c.name ?? '?'}" src=${c.src ? 'ok' : 'MISSING'} trim=${c.trimStart ?? 0}-${c.trimEnd ?? '?'} role=${c.role ?? 'normal'} muteAudio=${c.muteAudio ?? false}`)
   }
   if (props.goals?.length) {
@@ -297,18 +329,17 @@ export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
   }
   // Determine which clip is rendering right now (for per-frame diagnostics)
   React.useMemo(() => {
-    for (let i = 0; i < clips.length; i++) {
+    for (let i = 0; i < allOrderedClips.length; i++) {
       const start = clipStartFrames[i] ?? 0;
-      const dur = Math.ceil(getClipDurationSeconds(clips[i]) * fps);
+      const dur = Math.ceil(getClipDurationSeconds(allOrderedClips[i]) * fps);
       if (frame >= start && frame < start + dur && frame === start) {
-        console.log(`[HighlightReel] → starting clip[${i + 1}] "${clips[i].name ?? '?'}" at frame ${frame}`)
+        console.log(`[HighlightReel] → starting clip[${i + 1}] "${allOrderedClips[i].name ?? '?'}" at frame ${frame}`)
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frame])
 
   // Music timeline: startInReel/endInReel are reel positions (not source positions).
-  const totalReelFrames = getHighlightReelDurationInFrames(props);
   const musicStartFrame = props.music?.startInReel != null
     ? Math.round(props.music.startInReel * fps)
     : 0;
@@ -319,15 +350,15 @@ export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
 
   return (
     <AbsoluteFill>
-      {/* Intro card — skipped entirely when durationSeconds is 0 (disabled in editor) */}
+      {/* Intro card — placed after intro-role clips (or at 0 if none) */}
       {introDurationFrames > 0 && (
-        <Sequence from={0} durationInFrames={introDurationFrames} name="Intro">
+        <Sequence from={introCardStartFrame} durationInFrames={introDurationFrames} name="Intro">
           <IntroCard {...props.intro} durationFrames={introDurationFrames} fps={fps} />
         </Sequence>
       )}
 
       {/* Ordered video clips with trim — use clip.src from project JSON */}
-      {clips.map((clip, index) => {
+      {allOrderedClips.map((clip, index) => {
         const durationSeconds = getClipDurationSeconds(clip);
         const durationFrames = Math.ceil(durationSeconds * fps);
         const from = clipStartFrames[index];
@@ -364,30 +395,33 @@ export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
       <CumulativeScoreboard
         fps={fps}
         clipStartFrames={clipStartFrames}
-        clips={clips}
+        clips={allOrderedClips}
         goals={props.goals}
         scoreboard={props.scoreboard}
-        introDurationFrames={introDurationFrames}
+        introDurationFrames={normalClipsStartFrame}
       />
       <Sequence from={0} durationInFrames={Infinity} name="Lower thirds" layout="none">
         <LowerThirdsOverlay {...(props.lowerThirds ?? {})} />
       </Sequence>
 
-      {/* Primary sponsor logo — bottom-right corner on clip frames */}
-      {props.outro?.sponsorLogoUrls?.[0] && introDurationFrames < totalReelFrames && (() => {
-        const outroDur = props.outro?.durationSeconds ? Math.ceil(props.outro.durationSeconds * fps) : 0;
-        const clipFrames = totalReelFrames - introDurationFrames - outroDur;
-        return clipFrames > 0 ? (
-          <Sequence from={introDurationFrames} durationInFrames={clipFrames} name="Sponsor" layout="none">
+      {/* Primary sponsor logo — bottom-right corner on normal clip frames (after intro card, before outro card) */}
+      {props.outro?.sponsorLogoUrls?.[0] && (() => {
+        const normalClipsFrames = normalClips.reduce((s, c) => s + Math.ceil(getClipDurationSeconds(c) * fps), 0);
+        const sponsorStart = normalClipsStartFrame;
+        const sponsorDuration = normalClipsFrames;
+        return sponsorDuration > 0 ? (
+          <Sequence from={sponsorStart} durationInFrames={sponsorDuration} name="Sponsor" layout="none">
             <SponsorLogoOverlay src={props.outro!.sponsorLogoUrls![0]} />
           </Sequence>
         ) : null;
       })()}
 
-      {/* Outro card — shown after all clips */}
+      {/* Outro card — shown after normal clips, before outro-role clips */}
       {props.outro && props.outro.durationSeconds > 0 && (() => {
         const outroDurationFrames = Math.ceil(props.outro.durationSeconds * fps);
-        const outroStartFrame = totalReelFrames - outroDurationFrames;
+        // Outro card starts after intro-role clips + intro card + normal clips
+        const normalClipsFrames = normalClips.reduce((s, c) => s + Math.ceil(getClipDurationSeconds(c) * fps), 0);
+        const outroStartFrame = introRoleClipFrames + introDurationFrames + normalClipsFrames;
         return (
           <Sequence from={outroStartFrame} durationInFrames={outroDurationFrames} name="Outro">
             <OutroCard
