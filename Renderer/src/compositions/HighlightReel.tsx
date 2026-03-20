@@ -173,20 +173,20 @@ const CumulativeScoreboard: React.FC<{
   // Hide everything during the intro (no clip active before clipStartFrames[0]).
   if (frame < introDurationFrames) return null;
 
-  // Intro/outro clips must never show scoreboard or scorer — enforced here in
-  // the renderer regardless of per-clip showScoreboard / showScorerAfterGoal flags.
+  // Intro/outro clips, and frames with no active clip (intro/outro cards), must
+  // never show scoreboard or scorer.
   const isNonNormalClip =
-    currentClip?.role === 'intro' || currentClip?.role === 'outro';
+    !currentClip || currentClip.role === 'intro' || currentClip.role === 'outro';
 
   const clipShowScoreboard = isNonNormalClip
     ? false
-    : currentClip?.showScoreboard === undefined
+    : currentClip.showScoreboard === undefined
       ? true
       : Boolean(currentClip.showScoreboard);
   const clipMinuteMarker = currentClip?.minuteMarker;
   const clipAllowsScorer = isNonNormalClip
     ? false
-    : currentClip?.showScorerAfterGoal === undefined
+    : currentClip.showScorerAfterGoal === undefined
       ? true
       : Boolean(currentClip.showScorerAfterGoal);
 
