@@ -1458,16 +1458,27 @@ export default function App() {
                   <ScoreboardOverlay scoreboard={scoreboard} minuteMarker={selectedClip.minuteMarker ?? ""} goals={goals} clips={clips} clipId={selectedClip.id} currentTimeInClip={videoCurrentTime} showScorerAfterGoal={selectedClip.showScorerAfterGoal} />
                 )}
 
-                {/* Primary sponsor logo — bottom-right corner during normal clip playback only */}
+                {/* Primary sponsor logo — corner for 16:9, centred in bottom black bar for 1:1 / 9:16 */}
                 {outro.sponsorLogoUrls[0] && selectedClip?.url && isNormalClip && !(isPlayingReel && (showIntroCard || showOutroCard)) && (
-                  <div style={{
-                    position: "absolute", bottom: 10, right: 10,
-                    background: "rgba(0,0,0,0.45)", borderRadius: 6, padding: "4px 6px",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    pointerEvents: "none",
-                  }}>
-                    <img src={outro.sponsorLogoUrls[0]} alt="Sponsor" style={{ height: 56, maxWidth: 140, objectFit: "contain" }} />
-                  </div>
+                  aspectRatio === "landscape" ? (
+                    <div style={{
+                      position: "absolute", bottom: 10, right: 10,
+                      background: "rgba(0,0,0,0.45)", borderRadius: 6, padding: "4px 6px",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      pointerEvents: "none",
+                    }}>
+                      <img src={outro.sponsorLogoUrls[0]} alt="Sponsor" style={{ height: 56, maxWidth: 140, objectFit: "contain" }} />
+                    </div>
+                  ) : (
+                    <div style={{
+                      position: "absolute", bottom: 0, left: 0, right: 0,
+                      height: aspectRatio === "square" ? "21.875%" : "34.18%",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      pointerEvents: "none",
+                    }}>
+                      <img src={outro.sponsorLogoUrls[0]} alt="Sponsor" style={{ height: "65%", maxWidth: "55%", objectFit: "contain" }} />
+                    </div>
+                  )
                 )}
 
               </div>
