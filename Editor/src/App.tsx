@@ -300,7 +300,7 @@ export default function App() {
       localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(buildProjectSnapshot()))
       toast("Project saved")
     } catch (err) {
-      toast(err instanceof DOMException && err.name === "QuotaExceededError" ? "Save failed – storage limit" : "Save failed")
+      toast(err instanceof DOMException && err.name === "QuotaExceededError" ? "Save failed – storage full (try removing unused clips)" : "Save failed")
     }
   }
 
@@ -309,7 +309,7 @@ export default function App() {
       localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(buildProjectSnapshot()))
       toast("Draft saved")
     } catch (err) {
-      toast(err instanceof DOMException && err.name === "QuotaExceededError" ? "Save failed – storage limit" : "Save failed")
+      toast(err instanceof DOMException && err.name === "QuotaExceededError" ? "Save failed – storage full (try removing unused clips)" : "Save failed")
     }
   }
 
@@ -437,12 +437,15 @@ export default function App() {
         video.currentTime = Math.min(1, Math.max(0.1, video.duration / 4 || 0.1))
       }
       video.onseeked = () => {
-        canvas.width = video.videoWidth || 320; canvas.height = video.videoHeight || 180
+        const MAX_W = 160
+        const srcW = video.videoWidth || 320; const srcH = video.videoHeight || 180
+        const scale = Math.min(1, MAX_W / srcW)
+        canvas.width = Math.round(srcW * scale); canvas.height = Math.round(srcH * scale)
         const ctx = canvas.getContext("2d")
         if (!ctx) { URL.revokeObjectURL(url); resolve({ thumbnail: "", duration }); return }
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
         URL.revokeObjectURL(url)
-        resolve({ thumbnail: canvas.toDataURL("image/png"), duration })
+        resolve({ thumbnail: canvas.toDataURL("image/jpeg", 0.6), duration })
       }
       video.onerror = () => { URL.revokeObjectURL(url); resolve({ thumbnail: "", duration: 0 }) }
     })
