@@ -58,7 +58,7 @@ export function OutroCard({ outro, className = "" }: Props) {
           <p style={{
             animation: anim.label,
             margin: 0,
-            fontSize: 10,
+            fontSize: 14,
             fontWeight: 700,
             letterSpacing: 3,
             textTransform: "uppercase",
@@ -70,7 +70,7 @@ export function OutroCard({ outro, className = "" }: Props) {
           <p style={{
             animation: anim.score,
             margin: "6px 0 0",
-            fontSize: 48,
+            fontSize: 72,
             fontWeight: 800,
             color: "#facc15",
             lineHeight: 1,
