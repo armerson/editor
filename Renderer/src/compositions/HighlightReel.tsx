@@ -1,10 +1,41 @@
 import React from 'react';
-import { AbsoluteFill, Sequence, Audio, useCurrentFrame, interpolate } from 'remotion';
+import { AbsoluteFill, Img, Sequence, Audio, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
 import type { GoalEvent, HighlightReelData } from '../types/reel';
 import { IntroCard } from '../components/IntroCard';
 import { ClipSegment } from '../components/ClipSegment';
 import { ScoreboardOverlay } from '../components/ScoreboardOverlay';
 import { LowerThirdsOverlay } from '../components/LowerThirdsOverlay';
+
+// ─── Sponsor logo overlay ──────────────────────────────────────────────────────
+const SPONSOR_IMG_TIMEOUT_MS = 90_000;
+
+const SponsorLogoOverlay: React.FC<{ src: string }> = ({ src }) => {
+  const { width, height } = useVideoConfig();
+  const s = Math.min(width, height) / 1080;
+  const logoPx = Math.round(120 * s);
+  const pad = Math.round(24 * s);
+  return (
+    <AbsoluteFill style={{ pointerEvents: 'none' }}>
+      <div style={{
+        position: 'absolute',
+        bottom: pad,
+        right: pad,
+        background: 'rgba(0,0,0,0.45)',
+        borderRadius: Math.round(8 * s),
+        padding: Math.round(6 * s),
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+        <Img
+          src={src}
+          delayRenderTimeoutInMilliseconds={SPONSOR_IMG_TIMEOUT_MS}
+          style={{ height: logoPx, maxWidth: Math.round(logoPx * 2.5), objectFit: 'contain' }}
+        />
+      </div>
+    </AbsoluteFill>
+  );
+};
 
 // ─── Renderer-side diagnostics ────────────────────────────────────────────────
 // These console calls run inside headless Chrome during the render; the server
@@ -338,6 +369,13 @@ export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
       <Sequence from={0} durationInFrames={Infinity} name="Lower thirds" layout="none">
         <LowerThirdsOverlay {...(props.lowerThirds ?? {})} />
       </Sequence>
+
+      {/* Sponsor logo — bottom-right corner, shown only on clip frames (not intro) */}
+      {props.intro?.sponsorLogoUrl && introDurationFrames < totalReelFrames && (
+        <Sequence from={introDurationFrames} durationInFrames={totalReelFrames - introDurationFrames} name="Sponsor" layout="none">
+          <SponsorLogoOverlay src={props.intro.sponsorLogoUrl} />
+        </Sequence>
+      )}
     </AbsoluteFill>
   );
 };

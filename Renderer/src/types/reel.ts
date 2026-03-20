@@ -28,6 +28,10 @@ export type IntroCardData = {
   matchDate?: string;
   /** Age group / competition label e.g. "U16 Girls" */
   ageGroup?: string;
+  /** Competition / tournament name e.g. "Premier League" or "FA Cup Round 3" */
+  competition?: string;
+  /** Sponsor logo URL — shown at the bottom of the intro card and as a corner overlay on clips */
+  sponsorLogoUrl?: string;
 };
 
 /** Role of a clip in the reel */

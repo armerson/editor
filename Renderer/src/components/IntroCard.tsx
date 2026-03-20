@@ -93,6 +93,8 @@ export const IntroCard: React.FC<IntroCardProps> = ({
   score: scoreProp,
   matchDate: matchDateProp,
   ageGroup: ageGroupProp,
+  competition,
+  sponsorLogoUrl,
 }) => {
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
@@ -403,6 +405,17 @@ export const IntroCard: React.FC<IntroCardProps> = ({
             {ageGroup}
           </span>
         )}
+        {competition && (
+          <span
+            style={{
+              fontSize: Math.round(28 * s),
+              color: 'rgba(255,255,255,0.38)',
+              fontStyle: 'italic',
+            }}
+          >
+            {competition}
+          </span>
+        )}
         <span
           style={{
             fontSize: Math.round(26 * s),
@@ -416,6 +429,29 @@ export const IntroCard: React.FC<IntroCardProps> = ({
           Match Highlights
         </span>
       </div>
+
+      {/* Sponsor logo */}
+      {sponsorLogoUrl && (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: Math.round(6 * s),
+            marginTop: Math.round(24 * s),
+            opacity: subtitleOpacity,
+          }}
+        >
+          <span style={{ fontFamily: 'system-ui, sans-serif', fontSize: Math.round(18 * s), color: 'rgba(255,255,255,0.20)', letterSpacing: Math.round(2 * s), textTransform: 'uppercase' }}>
+            Sponsored by
+          </span>
+          <Img
+            src={sponsorLogoUrl}
+            delayRenderTimeoutInMilliseconds={IMG_TIMEOUT_MS}
+            style={{ height: Math.round(60 * s), maxWidth: Math.round(240 * s), objectFit: 'contain', opacity: 0.75 }}
+          />
+        </div>
+      )}
 
       {/* Legacy: title-only mode (no badges at all) */}
       {!hasBothBadges && !effectiveHomeBadge && !effectiveAwayBadge && (

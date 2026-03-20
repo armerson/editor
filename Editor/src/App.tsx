@@ -61,6 +61,8 @@ const DEFAULT_INTRO: IntroData = {
   score: "",
   matchDate: "",
   ageGroup: "",
+  competition: "",
+  sponsorLogoUrl: "",
   homeBadgeUrl: "",
   awayBadgeUrl: "",
   durationSeconds: 3,
@@ -116,6 +118,7 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const homeBadgeInputRef = useRef<HTMLInputElement | null>(null)
   const awayBadgeInputRef = useRef<HTMLInputElement | null>(null)
+  const sponsorLogoInputRef = useRef<HTMLInputElement | null>(null)
   const musicInputRef = useRef<HTMLInputElement | null>(null)
   // videoRef always points to whichever video is currently active/visible
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -196,6 +199,7 @@ export default function App() {
         ...intro,
         homeBadgeUrl: intro.homeBadgeUrl.startsWith("http") ? intro.homeBadgeUrl : "",
         awayBadgeUrl: intro.awayBadgeUrl.startsWith("http") ? intro.awayBadgeUrl : "",
+        sponsorLogoUrl: intro.sponsorLogoUrl.startsWith("http") ? intro.sponsorLogoUrl : "",
         // durationSeconds: 0 signals the renderer to skip the intro entirely.
         durationSeconds: introEnabled ? intro.durationSeconds : 0,
       },
@@ -584,7 +588,7 @@ export default function App() {
 
   const uploadBadge = async (
     file: File,
-    field: "homeBadgeUrl" | "awayBadgeUrl",
+    field: "homeBadgeUrl" | "awayBadgeUrl" | "sponsorLogoUrl",
     e: ChangeEvent<HTMLInputElement>
   ) => {
     if (isFirebaseConfigured()) {
@@ -612,6 +616,11 @@ export default function App() {
   const handleAwayBadgeUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return
     void uploadBadge(file, "awayBadgeUrl", e)
+  }
+
+  const handleSponsorLogoUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return
+    void uploadBadge(file, "sponsorLogoUrl", e)
   }
 
   const handleMusicUpload = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -1036,6 +1045,7 @@ export default function App() {
           <input ref={fileInputRef} type="file" accept="video/*" multiple className="hidden" onChange={handleFilesSelected} />
           <input ref={homeBadgeInputRef} type="file" accept="image/*" className="hidden" onChange={handleHomeBadgeUpload} />
           <input ref={awayBadgeInputRef} type="file" accept="image/*" className="hidden" onChange={handleAwayBadgeUpload} />
+          <input ref={sponsorLogoInputRef} type="file" accept="image/*" className="hidden" onChange={handleSponsorLogoUpload} />
           <input ref={musicInputRef} type="file" accept="audio/*" className="hidden" onChange={handleMusicUpload} />
 
           {/* Clip list */}
@@ -1087,6 +1097,7 @@ export default function App() {
                 { label: "Score", key: "score" as const, placeholder: "2-1" },
                 { label: "Match date", key: "matchDate" as const, placeholder: "11 Mar 2026" },
                 { label: "Age group", key: "ageGroup" as const, placeholder: "U12" },
+                { label: "Competition", key: "competition" as const, placeholder: "Premier League" },
               ].map(({ label, key, placeholder }) => (
                 <div key={key}>
                   <label className="mb-1 block text-[10px] font-medium text-neutral-400">{label}</label>
@@ -1122,6 +1133,25 @@ export default function App() {
                   </div>
                 </div>
               </div>
+              {/* Sponsor logo */}
+              <div>
+                <label className="mb-1 block text-[10px] font-medium text-neutral-400">Sponsor logo</label>
+                <p className="mb-1.5 text-[9px] text-neutral-500">Shown on the intro card and as a corner overlay on clips</p>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => sponsorLogoInputRef.current?.click()}
+                    className="rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-xs hover:bg-neutral-700">
+                    {intro.sponsorLogoUrl ? "Change" : "Upload"}
+                  </button>
+                  {intro.sponsorLogoUrl && (
+                    <>
+                      <img src={intro.sponsorLogoUrl} alt="Sponsor" className="h-8 w-16 rounded border border-neutral-600 object-contain bg-neutral-800" />
+                      <button type="button" onClick={() => setIntro((p) => ({ ...p, sponsorLogoUrl: "" }))}
+                        className="text-[10px] text-neutral-500 hover:text-red-400">Remove</button>
+                    </>
+                  )}
+                </div>
+              </div>
+
               <div>
                 <label className="mb-1 block text-[10px] font-medium text-neutral-400">Intro duration (s)</label>
                 <input type="number" min={1} max={10} step={0.5} value={intro.durationSeconds}

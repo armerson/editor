@@ -283,6 +283,11 @@ export function IntroCard({ intro, className = "" }: Props) {
             {intro.ageGroup}
           </p>
         )}
+        {intro.competition && (
+          <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", margin: 0, fontStyle: "italic" }}>
+            {intro.competition}
+          </p>
+        )}
         <p
           style={{
             fontSize: 10,
@@ -296,6 +301,29 @@ export function IntroCard({ intro, className = "" }: Props) {
           Match Highlights
         </p>
       </div>
+
+      {/* Sponsor logo — bottom of card */}
+      {intro.sponsorLogoUrl && (
+        <div
+          style={{
+            animation: anim.subtitle,
+            marginTop: 16,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
+          <p style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", margin: 0, letterSpacing: 1, textTransform: "uppercase", fontFamily: "system-ui, sans-serif" }}>
+            Sponsored by
+          </p>
+          <img
+            src={intro.sponsorLogoUrl}
+            alt="Sponsor"
+            style={{ height: 32, maxWidth: 120, objectFit: "contain", opacity: 0.8 }}
+          />
+        </div>
+      )}
     </div>
   )
 }

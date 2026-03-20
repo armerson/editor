@@ -9,6 +9,10 @@ export type IntroData = {
   score: string
   matchDate: string
   ageGroup: string
+  /** Competition / tournament name, e.g. "Premier League" or "FA Cup" */
+  competition: string
+  /** Sponsor logo URL — shown on the intro card and as a corner overlay on clips */
+  sponsorLogoUrl: string
   /** Home club badge URL (replaces legacy clubBadgeUrl). */
   homeBadgeUrl: string
   /** Away club badge URL. Optional — may be empty. */

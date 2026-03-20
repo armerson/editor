@@ -41,6 +41,8 @@ export type ProjectIntro = {
   score?: string
   matchDate?: string
   ageGroup?: string
+  competition?: string
+  sponsorLogoUrl?: string
   /** Legacy single-badge field — maps to homeBadgeUrl when homeBadgeUrl is absent */
   clubBadgeUrl?: string
   /** Home team badge URL */
@@ -241,6 +243,8 @@ export function projectJsonToHighlightReelData(
     score: project.intro?.score ?? undefined,
     matchDate: project.intro?.matchDate ?? undefined,
     ageGroup: project.intro?.ageGroup ?? undefined,
+    competition: project.intro?.competition || undefined,
+    sponsorLogoUrl: project.intro?.sponsorLogoUrl || undefined,
   }
 
   let music: MusicTrackData | undefined
