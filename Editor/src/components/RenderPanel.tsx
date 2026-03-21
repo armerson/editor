@@ -1,3 +1,4 @@
+import { useState } from "react"
 import type { RenderState } from "../types"
 import { SharePanel } from "./SharePanel"
 
@@ -18,6 +19,15 @@ const STATUS_LABEL: Record<string, string> = {
 
 export function RenderPanel({ renderState, onReset, fileName = "highlight", defaultCaption }: Props) {
   const { status, progress, downloadUrl, error } = renderState
+  const [copied, setCopied] = useState(false)
+
+  const handleCopyError = () => {
+    if (!error) return
+    navigator.clipboard.writeText(error).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }).catch(() => undefined)
+  }
 
   if (status === "idle") return null
 
@@ -105,9 +115,20 @@ export function RenderPanel({ renderState, onReset, fileName = "highlight", defa
         </div>
       )}
 
-      {/* Error message */}
+      {/* Error detail */}
       {status === "error" && error && (
-        <p className="mb-3 text-sm text-red-300">{error}</p>
+        <div className="mb-3">
+          <pre className="max-h-44 overflow-y-auto rounded-lg bg-red-950/50 px-3 py-2.5 font-mono text-[11px] leading-relaxed text-red-200 whitespace-pre-wrap break-words">
+            {error}
+          </pre>
+          <button
+            type="button"
+            onClick={handleCopyError}
+            className="mt-1.5 text-[10px] text-neutral-500 hover:text-neutral-300"
+          >
+            {copied ? "Copied!" : "Copy error"}
+          </button>
+        </div>
       )}
 
       {/* Done: inline video preview + download + share */}
