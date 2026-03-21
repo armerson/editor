@@ -28,6 +28,7 @@ import type {
   AspectRatioPreset,
   Clip,
   ClipRole,
+  ClubProfile,
   GoalEvent,
   IntroData,
   OutroData,
@@ -35,6 +36,8 @@ import type {
   RenderState,
   ScoreboardData,
 } from "./types"
+import { ClubProfilePanel } from "./components/ClubProfilePanel"
+import { useClubProfiles } from "./hooks/useClubProfiles"
 import { IntroCard } from "./components/IntroCard"
 import { OutroCard } from "./components/OutroCard"
 import { ScoreboardOverlay } from "./components/ScoreboardOverlay"
@@ -125,6 +128,8 @@ export default function App() {
     downloadUrl: null,
     error: null,
   })
+
+  const { profiles: clubProfiles, addProfile: addClubProfile, deleteProfile: deleteClubProfile } = useClubProfiles()
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const homeBadgeInputRef = useRef<HTMLInputElement | null>(null)
@@ -368,6 +373,45 @@ export default function App() {
       await applyProjectToState(project)
       toast("Project loaded")
     } catch { toast("Load failed") }
+  }
+
+  const handleSaveClubProfile = (name: string) => {
+    // Exclude blob:// URLs — they're session-only and won't survive a page reload
+    const homeBadge = intro.homeBadgeUrl.startsWith("blob:") ? "" : intro.homeBadgeUrl
+    const sponsors = outro.sponsorLogoUrls.filter((u) => u && !u.startsWith("blob:"))
+    const hadBlobs =
+      (intro.homeBadgeUrl !== "" && intro.homeBadgeUrl.startsWith("blob:")) ||
+      outro.sponsorLogoUrls.some((u) => u && u.startsWith("blob:"))
+    addClubProfile({
+      name,
+      teamName: intro.teamName,
+      homeBadgeUrl: homeBadge,
+      ageGroup: intro.ageGroup,
+      introDurationSeconds: intro.durationSeconds,
+      scoreboardHomeTeamName: scoreboard.homeTeamName,
+      outroEnabled: outro.enabled,
+      sponsorLogoUrls: sponsors,
+      outroDurationSeconds: outro.durationSeconds,
+    })
+    toast(hadBlobs ? `Profile "${name}" saved (locally-uploaded images not included — re-upload via Firebase to persist them)` : `Profile "${name}" saved`)
+  }
+
+  const handleApplyClubProfile = (profile: ClubProfile) => {
+    setIntro((prev) => ({
+      ...prev,
+      teamName: profile.teamName,
+      homeBadgeUrl: profile.homeBadgeUrl,
+      ageGroup: profile.ageGroup,
+      durationSeconds: profile.introDurationSeconds,
+    }))
+    setScoreboard((prev) => ({ ...prev, homeTeamName: profile.scoreboardHomeTeamName }))
+    setOutro((prev) => ({
+      ...prev,
+      enabled: profile.outroEnabled,
+      sponsorLogoUrls: profile.sponsorLogoUrls,
+      durationSeconds: profile.outroDurationSeconds,
+    }))
+    toast(`Profile "${profile.name}" applied`)
   }
 
   const handleRestoreDraft = async () => {
@@ -1227,6 +1271,15 @@ export default function App() {
               )}
             </div>
           </div>
+
+          {/* Club Profile */}
+          <ClubProfilePanel
+            profiles={clubProfiles}
+            currentTeamName={intro.teamName}
+            onSave={handleSaveClubProfile}
+            onApply={handleApplyClubProfile}
+            onDelete={deleteClubProfile}
+          />
 
           {/* Match & Intro */}
           <div className="mb-4 rounded-xl border border-neutral-800 bg-neutral-900 p-4">

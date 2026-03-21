@@ -104,6 +104,26 @@ export type ProjectData = {
   transitions?: Array<{ type?: string; durationSeconds?: number }>
 }
 
+// ── Club profile ──────────────────────────────────────────────────────────────
+
+/** Persistent club identity saved across projects. Match-specific fields (opponent, date, score) are excluded. */
+export type ClubProfile = {
+  id: string
+  name: string
+  savedAt: number
+  // Intro fields
+  teamName: string
+  homeBadgeUrl: string
+  ageGroup: string
+  introDurationSeconds: number
+  // Scoreboard
+  scoreboardHomeTeamName: string
+  // Outro
+  outroEnabled: boolean
+  sponsorLogoUrls: string[]
+  outroDurationSeconds: number
+}
+
 // ── Render state ──────────────────────────────────────────────────────────────
 
 export type RenderStatus = "idle" | "submitting" | "queued" | "rendering" | "done" | "error"
