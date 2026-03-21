@@ -42,8 +42,21 @@ export async function startRender(project: ProjectData): Promise<StartRenderResp
   })
 
   if (!res.ok) {
-    const text = await res.text().catch(() => "")
-    throw new Error(`Render start failed: ${res.status} ${res.statusText} ${text}`.trim())
+    const raw = await res.text().catch(() => "")
+    let message: string
+    try {
+      const body = JSON.parse(raw) as { error?: string; errors?: string[] }
+      if (body.errors?.length) {
+        message = body.errors.join("\n")
+      } else if (body.error) {
+        message = body.error
+      } else {
+        message = `Render start failed (${res.status})`
+      }
+    } catch {
+      message = raw.trim() || `Render start failed (${res.status})`
+    }
+    throw new Error(message)
   }
 
   return (await res.json()) as StartRenderResponse
@@ -52,8 +65,15 @@ export async function startRender(project: ProjectData): Promise<StartRenderResp
 export async function getRenderStatus(jobId: string): Promise<RenderStatusResponse> {
   const res = await fetch(`${API_BASE}/api/render/${jobId}`, { headers: apiHeaders() })
   if (!res.ok) {
-    const text = await res.text().catch(() => "")
-    throw new Error(`Render status failed: ${res.status} ${res.statusText} ${text}`.trim())
+    const raw = await res.text().catch(() => "")
+    let message: string
+    try {
+      const body = JSON.parse(raw) as { error?: string }
+      message = body.error || `Status check failed (${res.status})`
+    } catch {
+      message = raw.trim() || `Status check failed (${res.status})`
+    }
+    throw new Error(message)
   }
   return (await res.json()) as RenderStatusResponse
 }
