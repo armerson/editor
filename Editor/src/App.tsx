@@ -1130,11 +1130,11 @@ export default function App() {
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             {saveLoadStatus && <span className="text-xs text-neutral-400">{saveLoadStatus}</span>}
-            {!saveLoadStatus && autoSaveStatus === "saved" && (
-              <span className="hidden text-xs text-neutral-600 md:inline">● draft saved</span>
+            {!saveLoadStatus && !isMobile && autoSaveStatus === "saved" && (
+              <span className="text-xs text-neutral-600">● draft saved</span>
             )}
-            {!saveLoadStatus && autoSaveStatus === "pending" && (
-              <span className="hidden text-xs text-neutral-700 md:inline">saving…</span>
+            {!saveLoadStatus && !isMobile && autoSaveStatus === "pending" && (
+              <span className="text-xs text-neutral-700">saving…</span>
             )}
             {/* Mobile: open sidebar */}
             <button type="button" onClick={() => setSidebarOpen(true)}
@@ -1144,17 +1144,21 @@ export default function App() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <button type="button" onClick={handleSaveProject} className="hidden rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm hover:bg-neutral-800 md:inline-flex">Save</button>
-            <button type="button" onClick={handleSaveDraft} className="hidden rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm hover:bg-neutral-800 md:inline-flex">Draft</button>
-            <button type="button" onClick={handleLoadProject} className="hidden rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm hover:bg-neutral-800 md:inline-flex">Load</button>
-            <button type="button" onClick={handlePlayReel} disabled={clips.length === 0}
-              className="hidden rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-40 md:inline-flex">
-              ▶ Play Reel
-            </button>
-            <button type="button" onClick={handleExportProject}
-              className="hidden rounded-lg border border-yellow-700/50 bg-yellow-500/10 px-3 py-1.5 text-sm font-medium text-yellow-400 hover:bg-yellow-500/20 md:inline-flex">
-              Export JSON
-            </button>
+            {!isMobile && <button type="button" onClick={handleSaveProject} className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm hover:bg-neutral-800">Save</button>}
+            {!isMobile && <button type="button" onClick={handleSaveDraft} className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm hover:bg-neutral-800">Draft</button>}
+            {!isMobile && <button type="button" onClick={handleLoadProject} className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm hover:bg-neutral-800">Load</button>}
+            {!isMobile && (
+              <button type="button" onClick={handlePlayReel} disabled={clips.length === 0}
+                className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-40">
+                ▶ Play Reel
+              </button>
+            )}
+            {!isMobile && (
+              <button type="button" onClick={handleExportProject}
+                className="rounded-lg border border-yellow-700/50 bg-yellow-500/10 px-3 py-1.5 text-sm font-medium text-yellow-400 hover:bg-yellow-500/20">
+                Export JSON
+              </button>
+            )}
             <button type="button" disabled={!canRender} onClick={handleRenderVideo}
               title={!canRender && validationErrors.length > 0 ? validationErrors.join(" · ") : undefined}
               className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors ${canRender ? "bg-emerald-500 text-black hover:bg-emerald-400" : "cursor-not-allowed bg-neutral-700 text-neutral-500"}`}>
