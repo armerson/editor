@@ -1,0 +1,18 @@
+{
+  "name": "QuickCut Match",
+  "short_name": "QuickCut",
+  "description": "Football match highlight editor",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

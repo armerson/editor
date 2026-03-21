@@ -121,6 +121,7 @@ export default function App() {
   const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "pending" | null>(null)
   const [draftBanner, setDraftBanner] = useState<"visible" | "dismissed" | null>(null)
   const [aspectRatio, setAspectRatio] = useState<AspectRatioPreset>("landscape")
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
   const [renderState, setRenderState] = useState<RenderState>({
     status: "idle",
     jobId: null,
@@ -450,6 +451,13 @@ export default function App() {
     window.addEventListener("keydown", handler)
     return () => window.removeEventListener("keydown", handler)
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Track viewport width for mobile layout
+  useEffect(() => {
+    const update = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener("resize", update)
+    return () => window.removeEventListener("resize", update)
   }, [])
 
   const handleExportProject = () => {
@@ -1113,30 +1121,38 @@ export default function App() {
           <div className="min-w-0">
             <div className="flex items-center gap-4">
               <div className="shrink-0 rounded-lg bg-black p-1">
-                <img src="/logo.png" alt="QuickCut Match" className="h-16 w-auto" />
+                <img src="/logo.png" alt="QuickCut Match" className="h-10 w-auto md:h-16" />
               </div>
               <input type="text" value={projectTitle} onChange={(e) => setProjectTitle(e.target.value)}
-                className="min-w-0 max-w-[240px] border-0 border-b border-transparent bg-transparent px-0 text-sm text-neutral-400 focus:border-neutral-600 focus:outline-none"
+                className="hidden min-w-0 max-w-[240px] border-0 border-b border-transparent bg-transparent px-0 text-sm text-neutral-400 focus:border-neutral-600 focus:outline-none md:block"
                 placeholder="Project title" />
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             {saveLoadStatus && <span className="text-xs text-neutral-400">{saveLoadStatus}</span>}
             {!saveLoadStatus && autoSaveStatus === "saved" && (
-              <span className="text-xs text-neutral-600">● draft saved</span>
+              <span className="hidden text-xs text-neutral-600 md:inline">● draft saved</span>
             )}
             {!saveLoadStatus && autoSaveStatus === "pending" && (
-              <span className="text-xs text-neutral-700">saving…</span>
+              <span className="hidden text-xs text-neutral-700 md:inline">saving…</span>
             )}
-            <button type="button" onClick={handleSaveProject} className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm hover:bg-neutral-800">Save</button>
-            <button type="button" onClick={handleSaveDraft} className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm hover:bg-neutral-800">Draft</button>
-            <button type="button" onClick={handleLoadProject} className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm hover:bg-neutral-800">Load</button>
+            {/* Mobile: open sidebar */}
+            <button type="button" onClick={() => setSidebarOpen(true)}
+              className="md:hidden rounded-lg border border-neutral-700 bg-neutral-900 p-2 hover:bg-neutral-800"
+              title="Open settings">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <button type="button" onClick={handleSaveProject} className="hidden rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm hover:bg-neutral-800 md:inline-flex">Save</button>
+            <button type="button" onClick={handleSaveDraft} className="hidden rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm hover:bg-neutral-800 md:inline-flex">Draft</button>
+            <button type="button" onClick={handleLoadProject} className="hidden rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm hover:bg-neutral-800 md:inline-flex">Load</button>
             <button type="button" onClick={handlePlayReel} disabled={clips.length === 0}
-              className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-40">
+              className="hidden rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-40 md:inline-flex">
               ▶ Play Reel
             </button>
             <button type="button" onClick={handleExportProject}
-              className="rounded-lg border border-yellow-700/50 bg-yellow-500/10 px-3 py-1.5 text-sm font-medium text-yellow-400 hover:bg-yellow-500/20">
+              className="hidden rounded-lg border border-yellow-700/50 bg-yellow-500/10 px-3 py-1.5 text-sm font-medium text-yellow-400 hover:bg-yellow-500/20 md:inline-flex">
               Export JSON
             </button>
             <button type="button" disabled={!canRender} onClick={handleRenderVideo}
@@ -1173,19 +1189,29 @@ export default function App() {
         </div>
       )}
 
+      {/* Mobile sidebar backdrop */}
+      {isMobile && sidebarOpen && (
+        <div className="fixed inset-0 z-30 bg-black/60" onClick={() => setSidebarOpen(false)} />
+      )}
+
       {/* Body */}
       <main className="flex min-h-0 flex-1 overflow-hidden">
         {/* Sidebar */}
         <aside
-          className="relative shrink-0 border-r border-neutral-800 transition-[width] duration-200"
-          style={{ width: sidebarOpen ? 288 : 40 }}
+          className={[
+            "border-r border-neutral-800 bg-neutral-950 z-40",
+            isMobile
+              ? `fixed inset-y-0 left-0 w-72 transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`
+              : "relative shrink-0 transition-[width] duration-200",
+          ].join(" ")}
+          style={isMobile ? undefined : { width: sidebarOpen ? 288 : 40 }}
         >
           {/* Collapse / expand toggle — always visible */}
           <button
             type="button"
             onClick={() => setSidebarOpen((v) => !v)}
             title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-            className="absolute -right-3 top-4 z-20 flex h-6 w-6 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900 text-neutral-400 shadow hover:text-white"
+            className="absolute -right-3 top-4 z-20 hidden h-6 w-6 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900 text-neutral-400 shadow hover:text-white md:flex"
           >
             <svg className="h-3 w-3" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
               {sidebarOpen
@@ -1209,11 +1235,21 @@ export default function App() {
           <div className={`h-full overflow-y-auto p-4 ${sidebarOpen ? "" : "hidden"}`}>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-neutral-400">Media</h2>
-            <button type="button" onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1.5 rounded-lg bg-yellow-500 px-3 py-1.5 text-xs font-bold text-black hover:bg-yellow-400">
-              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-              Upload
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Mobile: close sidebar */}
+              <button type="button" onClick={() => setSidebarOpen(false)}
+                className="md:hidden rounded-lg border border-neutral-700 bg-neutral-800 p-1.5 text-neutral-400 hover:text-white"
+                title="Close">
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <button type="button" onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-1.5 rounded-lg bg-yellow-500 px-3 py-1.5 text-xs font-bold text-black hover:bg-yellow-400">
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+                Upload
+              </button>
+            </div>
           </div>
           <input ref={fileInputRef} type="file" accept="video/*" multiple className="hidden" onChange={handleFilesSelected} />
           <input ref={homeBadgeInputRef} type="file" accept="image/*" className="hidden" onChange={handleHomeBadgeUpload} />
