@@ -37,8 +37,8 @@ const API_BASE = (
 
 function claimsToUser(claims: JwtClaims | null): AuthUser {
   const tier: Tier = (claims?.tier as Tier | undefined) ?? "free"
-  const renderLimit =
-    claims?.render_limit ?? (tier === "pro" ? Infinity : TIER_RENDER_LIMIT[tier])
+  // Pro is always unlimited on the frontend; the backend sends 9999 as a JSON-safe sentinel.
+  const renderLimit = tier === "pro" ? Infinity : (claims?.render_limit ?? TIER_RENDER_LIMIT[tier])
   return {
     email: claims?.email ?? claims?.sub ?? null,
     tier,
