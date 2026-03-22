@@ -1470,6 +1470,15 @@ export default function App() {
             </div>
           </div>
 
+          {/* Mobile-only project actions */}
+          {isMobile && (
+            <div className="border-t border-neutral-800 px-4 py-3 flex gap-2">
+              <button type="button" onClick={handleSaveProject} className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 py-2 text-sm hover:bg-neutral-800">Save</button>
+              <button type="button" onClick={handleSaveDraft} className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 py-2 text-sm hover:bg-neutral-800">Draft</button>
+              <button type="button" onClick={handleLoadProject} className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 py-2 text-sm hover:bg-neutral-800">Load</button>
+            </div>
+          )}
+
           </div>{/* end full sidebar content */}
         </aside>
 
