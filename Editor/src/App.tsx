@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react"
+import { useAuth } from "./context/AuthContext"
+import { AccountMenu } from "./components/AccountMenu"
+import { UpgradeModal } from "./components/UpgradeModal"
+import { RenderLimitError } from "./lib/renderApi"
 
 /**
  * If `url` is a proxy-wrapped URL (e.g. http://localhost:3000/proxy?src=<encoded>),
@@ -122,6 +126,8 @@ export default function App() {
   const [draftBanner, setDraftBanner] = useState<"visible" | "dismissed" | null>(null)
   const [aspectRatio, setAspectRatio] = useState<AspectRatioPreset>("landscape")
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  const { incrementRendersUsed, refreshUser } = useAuth()
   const [renderState, setRenderState] = useState<RenderState>({
     status: "idle",
     jobId: null,
@@ -482,8 +488,14 @@ export default function App() {
     setRenderState({ status: "submitting", jobId: null, progress: 0, downloadUrl: null, error: null })
     try {
       const { jobId } = await startRender(project)
+      incrementRendersUsed()
       setRenderState({ status: "rendering", jobId, progress: 0, downloadUrl: null, error: null })
     } catch (err) {
+      if (err instanceof RenderLimitError) {
+        setShowUpgradeModal(true)
+        setRenderState({ status: "idle", jobId: null, progress: 0, downloadUrl: null, error: null })
+        return
+      }
       setRenderState({ status: "error", jobId: null, progress: 0, downloadUrl: null,
         error: err instanceof Error ? err.message : "Render start failed" })
     }
@@ -508,6 +520,7 @@ export default function App() {
         if (res.status === "done") {
           setRenderState({ status: "done", jobId: renderState.jobId, progress: 100,
             downloadUrl: res.downloadUrl ?? null, error: null })
+          refreshUser()
           return
         }
         setRenderState({ status: "error", jobId: renderState.jobId, progress: renderState.progress,
@@ -1159,6 +1172,7 @@ export default function App() {
                 Export JSON
               </button>
             )}
+            <AccountMenu onUpgrade={() => setShowUpgradeModal(true)} />
             <button type="button" disabled={!canRender} onClick={handleRenderVideo}
               title={!canRender && validationErrors.length > 0 ? validationErrors.join(" · ") : undefined}
               className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors ${canRender ? "bg-emerald-500 text-black hover:bg-emerald-400" : "cursor-not-allowed bg-neutral-700 text-neutral-500"}`}>
@@ -1812,6 +1826,8 @@ export default function App() {
           </div>
         </section>
       </main>
+
+      {showUpgradeModal && <UpgradeModal onClose={() => setShowUpgradeModal(false)} />}
     </div>
   )
 }

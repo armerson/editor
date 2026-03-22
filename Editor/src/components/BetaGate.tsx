@@ -1,4 +1,5 @@
 import { type ReactNode, useState, useEffect } from "react"
+import { AuthProvider } from "../context/AuthContext"
 
 const API_BASE = ((import.meta.env.VITE_RENDER_API_BASE as string | undefined) ?? "http://localhost:3001").replace(/\/$/, "")
 
@@ -37,7 +38,11 @@ export function BetaGate({ children }: Props) {
     }
   }, [])
 
-  if (unlocked) return <>{children}</>
+  if (unlocked) return (
+    <AuthProvider onLogout={() => setUnlocked(false)}>
+      {children}
+    </AuthProvider>
+  )
 
   function switchMode(next: Mode) {
     setMode(next)
