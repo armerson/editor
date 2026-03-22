@@ -2,6 +2,14 @@ import type { ProjectData } from "../types"
 
 export type RenderJobStatus = "queued" | "rendering" | "done" | "error"
 
+/** Thrown when the server rejects a render due to a quota or tier limit (HTTP 402/429). */
+export class RenderLimitError extends Error {
+  constructor(message = "Render limit reached") {
+    super(message)
+    this.name = "RenderLimitError"
+  }
+}
+
 export type StartRenderResponse = {
   jobId: string
 }
@@ -56,6 +64,7 @@ export async function startRender(project: ProjectData): Promise<StartRenderResp
     } catch {
       message = raw.trim() || `Render start failed (${res.status})`
     }
+    if (res.status === 402 || res.status === 429) throw new RenderLimitError(message)
     throw new Error(message)
   }
 
