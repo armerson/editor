@@ -31,12 +31,24 @@ db.exec(`
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    email         TEXT NOT NULL UNIQUE COLLATE NOCASE,
-    password_hash TEXT NOT NULL,
-    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    email                TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    password_hash        TEXT NOT NULL,
+    created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+    tier                 TEXT NOT NULL DEFAULT 'free',
+    renders_this_month   INTEGER NOT NULL DEFAULT 0,
+    renders_period_start TEXT NOT NULL DEFAULT (strftime('%Y-%m-01', 'now'))
   )
 `)
+
+// Idempotent migrations — add new columns to existing databases.
+for (const sql of [
+  `ALTER TABLE users ADD COLUMN tier TEXT NOT NULL DEFAULT 'free'`,
+  `ALTER TABLE users ADD COLUMN renders_this_month INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE users ADD COLUMN renders_period_start TEXT NOT NULL DEFAULT (strftime('%Y-%m-01', 'now'))`,
+]) {
+  try { db.exec(sql) } catch { /* column already exists — safe to ignore */ }
+}
 
 logger.info({ db: DB_PATH }, "SQLite database ready")
 
