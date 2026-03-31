@@ -1576,14 +1576,16 @@ export default function App() {
                       onTimeUpdate={() => { if (activePrimaryRef.current) handleVideoTimeUpdate() }}
                       onEnded={() => { if (activePrimaryRef.current) handleVideoEnded() }}
                     />
-                    {/* Crop overlay on top of cropped video */}
-                    <CropOverlay
-                      videoWidth={videoSize.width}
-                      videoHeight={videoSize.height}
-                      crop={crop}
-                      setCrop={setCrop}
-                    />
                   </div>
+                ) : null}
+                {/* Crop overlay — outside the overflow:hidden container so it isn't clipped */}
+                {selectedClip?.url && !isPlayingReel && !showIntroCard && !showOutroCard ? (
+                  <CropOverlay
+                    videoWidth={videoSize.width}
+                    videoHeight={videoSize.height}
+                    crop={crop}
+                    setCrop={setCrop}
+                  />
                 ) : null}
                 {/* Buffer — only render when preloading next clip */}
                 {!activePrimary && (
