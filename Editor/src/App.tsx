@@ -47,11 +47,13 @@ import { OutroCard } from "./components/OutroCard"
 import { ScoreboardOverlay } from "./components/ScoreboardOverlay"
 import { AspectRatioPicker } from "./components/AspectRatioPicker"
 import { CropOverlay } from "./components/CropOverlay"
+
+export default function App() {
+  // ...existing code...
   // Crop/zoom state for overlay
   const [crop, setCrop] = useState<{ x: number; y: number; width: number; height: number }>({ x: 100, y: 50, width: 200, height: 300 });
   const [videoSize, setVideoSize] = useState<{ width: number; height: number }>({ width: 640, height: 360 });
 
-  // Update video size on load/resize
   useEffect(() => {
     const updateSize = () => {
       if (primaryRef.current) {
