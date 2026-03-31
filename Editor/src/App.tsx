@@ -46,34 +46,9 @@ import { IntroCard } from "./components/IntroCard"
 import { OutroCard } from "./components/OutroCard"
 import { ScoreboardOverlay } from "./components/ScoreboardOverlay"
 import { AspectRatioPicker } from "./components/AspectRatioPicker"
+
 import { CropOverlay } from "./components/CropOverlay"
-
-export default function App() {
-  // ...existing code...
-  // Crop/zoom state for overlay
-  const [crop, setCrop] = useState<{ x: number; y: number; width: number; height: number }>({ x: 100, y: 50, width: 200, height: 300 });
-  const [videoSize, setVideoSize] = useState<{ width: number; height: number }>({ width: 640, height: 360 });
-
-  useEffect(() => {
-    const updateSize = () => {
-      if (primaryRef.current) {
-        setVideoSize({
-          width: primaryRef.current.videoWidth || 640,
-          height: primaryRef.current.videoHeight || 360,
-        });
-      }
-    };
-    if (primaryRef.current) {
-      primaryRef.current.addEventListener('loadedmetadata', updateSize);
-      window.addEventListener('resize', updateSize);
-    }
-    return () => {
-      if (primaryRef.current) {
-        primaryRef.current.removeEventListener('loadedmetadata', updateSize);
-        window.removeEventListener('resize', updateSize);
-      }
-    };
-  }, []);
+// ...existing code...
 import { ValidationPanel } from "./components/ValidationPanel"
 import { RenderPanel } from "./components/RenderPanel"
 import { MusicSearch } from "./components/MusicSearch"
@@ -118,6 +93,30 @@ const ASPECT_RATIO_CLASS: Record<AspectRatioPreset, string> = {
 }
 
 export default function App() {
+  // Crop/zoom state for overlay
+  const [crop, setCrop] = useState<{ x: number; y: number; width: number; height: number }>({ x: 100, y: 50, width: 200, height: 300 });
+  const [videoSize, setVideoSize] = useState<{ width: number; height: number }>({ width: 640, height: 360 });
+
+  useEffect(() => {
+    const updateSize = () => {
+      if (primaryRef.current) {
+        setVideoSize({
+          width: primaryRef.current.videoWidth || 640,
+          height: primaryRef.current.videoHeight || 360,
+        });
+      }
+    };
+    if (primaryRef.current) {
+      primaryRef.current.addEventListener('loadedmetadata', updateSize);
+      window.addEventListener('resize', updateSize);
+    }
+    return () => {
+      if (primaryRef.current) {
+        primaryRef.current.removeEventListener('loadedmetadata', updateSize);
+        window.removeEventListener('resize', updateSize);
+      }
+    };
+  }, []);
   const [clips, setClips] = useState<Clip[]>([])
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null)
   const [introSelected, setIntroSelected] = useState(false)
