@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef } from 'react';
 
 interface CropOverlayProps {
   videoWidth: number;
@@ -7,7 +7,6 @@ interface CropOverlayProps {
   setCrop: (crop: { x: number; y: number; width: number; height: number }) => void;
 }
 
-// Simple draggable & resizable crop overlay
 const MIN_SIZE = 40;
 
 export const CropOverlay: React.FC<CropOverlayProps> = ({
@@ -16,56 +15,11 @@ export const CropOverlay: React.FC<CropOverlayProps> = ({
   crop,
   setCrop,
 }) => {
-  const overlayRef = useRef<HTMLDivElement>(null);
-  const [dragging, setDragging] = useState(false);
-  const [resizing, setResizing] = useState<null | 'br'>(null);
-  const [start, setStart] = useState<{ x: number; y: number } | null>(null);
-  const [startCrop, setStartCrop] = useState<typeof crop | null>(null);
+  const dragRef = useRef<{ startX: number; startY: number; startCrop: typeof crop } | null>(null);
+  const resizeRef = useRef<{ startX: number; startY: number; startCrop: typeof crop } | null>(null);
 
-  // Drag
-  const onMouseDown = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setDragging(true);
-    setStart({ x: e.clientX, y: e.clientY });
-    setStartCrop({ ...crop });
-  };
-  const onMouseMove = (e: MouseEvent) => {
-    if (dragging && start && startCrop) {
-      const dx = e.clientX - start.x;
-      const dy = e.clientY - start.y;
-      let newX = Math.max(0, Math.min(videoWidth - crop.width, startCrop.x + dx));
-      let newY = Math.max(0, Math.min(videoHeight - crop.height, startCrop.y + dy));
-      setCrop({ ...crop, x: newX, y: newY });
-    }
-    if (resizing && start && startCrop) {
-      // Only bottom-right resize for simplicity
-      let newWidth = Math.max(MIN_SIZE, Math.min(videoWidth - startCrop.x, startCrop.width + (e.clientX - start.x)));
-      let newHeight = Math.max(MIN_SIZE, Math.min(videoHeight - startCrop.y, startCrop.height + (e.clientY - start.y)));
-      setCrop({ ...crop, width: newWidth, height: newHeight });
-    }
-  };
-  const onMouseUp = () => {
-    setDragging(false);
-    setResizing(null);
-    setStart(null);
-    setStartCrop(null);
-  };
-
-  React.useEffect(() => {
-    if (dragging || resizing) {
-      window.addEventListener('mousemove', onMouseMove);
-      window.addEventListener('mouseup', onMouseUp);
-      return () => {
-        window.removeEventListener('mousemove', onMouseMove);
-        window.removeEventListener('mouseup', onMouseUp);
-      };
-    }
-  });
-
-  // Only bottom-right resize handle for simplicity
   return (
     <div
-      ref={overlayRef}
       style={{
         position: 'absolute',
         left: crop.x,
@@ -74,14 +28,31 @@ export const CropOverlay: React.FC<CropOverlayProps> = ({
         height: crop.height,
         border: '2px solid #00eaff',
         boxSizing: 'border-box',
-        cursor: dragging ? 'move' : 'pointer',
+        cursor: 'move',
         zIndex: 10,
         background: 'rgba(0,0,0,0.05)',
         userSelect: 'none',
       }}
-      onMouseDown={onMouseDown}
+      onPointerDown={e => {
+        e.stopPropagation();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        dragRef.current = { startX: e.clientX, startY: e.clientY, startCrop: { ...crop } };
+      }}
+      onPointerMove={e => {
+        if (!dragRef.current) return;
+        const dx = e.clientX - dragRef.current.startX;
+        const dy = e.clientY - dragRef.current.startY;
+        const { startCrop } = dragRef.current;
+        const newX = Math.max(0, Math.min(videoWidth - startCrop.width, startCrop.x + dx));
+        const newY = Math.max(0, Math.min(videoHeight - startCrop.height, startCrop.y + dy));
+        setCrop({ ...startCrop, x: newX, y: newY });
+      }}
+      onPointerUp={e => {
+        dragRef.current = null;
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }}
     >
-      {/* Resize handle */}
+      {/* Resize handle - bottom-right */}
       <div
         style={{
           position: 'absolute',
@@ -93,11 +64,21 @@ export const CropOverlay: React.FC<CropOverlayProps> = ({
           borderRadius: 8,
           cursor: 'nwse-resize',
         }}
-        onMouseDown={e => {
+        onPointerDown={e => {
           e.stopPropagation();
-          setResizing('br');
-          setStart({ x: e.clientX, y: e.clientY });
-          setStartCrop({ ...crop });
+          e.currentTarget.setPointerCapture(e.pointerId);
+          resizeRef.current = { startX: e.clientX, startY: e.clientY, startCrop: { ...crop } };
+        }}
+        onPointerMove={e => {
+          if (!resizeRef.current) return;
+          const { startX, startY, startCrop } = resizeRef.current;
+          const newWidth = Math.max(MIN_SIZE, Math.min(videoWidth - startCrop.x, startCrop.width + (e.clientX - startX)));
+          const newHeight = Math.max(MIN_SIZE, Math.min(videoHeight - startCrop.y, startCrop.height + (e.clientY - startY)));
+          setCrop({ ...startCrop, width: newWidth, height: newHeight });
+        }}
+        onPointerUp={e => {
+          resizeRef.current = null;
+          e.currentTarget.releasePointerCapture(e.pointerId);
         }}
       />
     </div>
