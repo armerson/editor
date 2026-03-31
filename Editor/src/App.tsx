@@ -1539,38 +1539,66 @@ export default function App() {
               <div className={`relative w-full overflow-hidden rounded-xl border border-neutral-700 bg-black ${ASPECT_RATIO_CLASS[aspectRatio]}`}> 
                 {/* ── Dual-video: both elements always in DOM for preloading ── */}
                 {/* Primary */}
-                <video
-                  ref={(el) => { primaryRef.current = el; if (activePrimaryRef.current) videoRef.current = el }}
-                  preload="auto"
-                  playsInline
-                  controls={activePrimary && !!selectedClip?.url && !isPlayingReel}
-                  muted={!clipAudioOn || (selectedClip?.muteAudio ?? false)}
-                  className="absolute inset-0 h-full w-full object-contain"
-                  style={{ opacity: (activePrimary && !!selectedClip?.url && !(isPlayingReel && showIntroCard && introEnabled)) ? 1 : 0, pointerEvents: activePrimary ? "auto" : "none", transition: "opacity 0.08s linear" }}
-                  onTimeUpdate={() => { if (activePrimaryRef.current) handleVideoTimeUpdate() }}
-                  onEnded={() => { if (activePrimaryRef.current) handleVideoEnded() }}
-                />
-                {/* Crop/Zoom Overlay — only show if a clip is selected and not playing reel/intro/outro */}
-                {selectedClip?.url && !isPlayingReel && !showIntroCard && !showOutroCard && (
-                  <CropOverlay
-                    videoWidth={videoSize.width}
-                    videoHeight={videoSize.height}
-                    crop={crop}
-                    setCrop={setCrop}
+                {/* Live crop/zoom preview */}
+                {selectedClip?.url && !isPlayingReel && !showIntroCard && !showOutroCard ? (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: crop.x,
+                      top: crop.y,
+                      width: crop.width,
+                      height: crop.height,
+                      overflow: 'hidden',
+                      zIndex: 2,
+                      background: 'rgba(0,0,0,0.7)',
+                      border: '3px dashed red',
+                    }}
+                  >
+                    <video
+                      ref={(el) => { primaryRef.current = el; if (activePrimaryRef.current) videoRef.current = el }}
+                      preload="auto"
+                      playsInline
+                      controls={activePrimary && !!selectedClip?.url && !isPlayingReel}
+                      muted={!clipAudioOn || (selectedClip?.muteAudio ?? false)}
+                      style={{
+                        position: 'absolute',
+                        left: -crop.x,
+                        top: -crop.y,
+                        width: videoSize.width,
+                        height: videoSize.height,
+                        objectFit: 'cover',
+                        pointerEvents: activePrimary ? 'auto' : 'none',
+                        opacity: (activePrimary && !!selectedClip?.url && !(isPlayingReel && showIntroCard && introEnabled)) ? 1 : 0,
+                        transition: 'opacity 0.08s linear',
+                        border: '3px solid lime',
+                        background: 'rgba(0,255,0,0.1)',
+                      }}
+                      onTimeUpdate={() => { if (activePrimaryRef.current) handleVideoTimeUpdate() }}
+                      onEnded={() => { if (activePrimaryRef.current) handleVideoEnded() }}
+                    />
+                    {/* Crop overlay on top of cropped video */}
+                    <CropOverlay
+                      videoWidth={videoSize.width}
+                      videoHeight={videoSize.height}
+                      crop={crop}
+                      setCrop={setCrop}
+                    />
+                  </div>
+                ) : null}
+                {/* Buffer — only render when preloading next clip */}
+                {!activePrimary && (
+                  <video
+                    ref={(el) => { bufferRef.current = el; if (!activePrimaryRef.current) videoRef.current = el }}
+                    preload="auto"
+                    playsInline
+                    controls={!!selectedClip?.url && !isPlayingReel}
+                    muted={!clipAudioOn || (selectedClip?.muteAudio ?? false)}
+                    className="absolute inset-0 h-full w-full object-contain"
+                    style={{ opacity: (!!selectedClip?.url && !(isPlayingReel && showIntroCard && introEnabled)) ? 1 : 0, pointerEvents: 'auto', transition: 'opacity 0.08s linear' }}
+                    onTimeUpdate={() => { if (!activePrimaryRef.current) handleVideoTimeUpdate() }}
+                    onEnded={() => { if (!activePrimaryRef.current) handleVideoEnded() }}
                   />
                 )}
-                {/* Buffer — hidden, preloading next clip */}
-                <video
-                  ref={(el) => { bufferRef.current = el; if (!activePrimaryRef.current) videoRef.current = el }}
-                  preload="auto"
-                  playsInline
-                  controls={!activePrimary && !!selectedClip?.url && !isPlayingReel}
-                  muted={!clipAudioOn || (selectedClip?.muteAudio ?? false)}
-                  className="absolute inset-0 h-full w-full object-contain"
-                  style={{ opacity: (!activePrimary && !!selectedClip?.url && !(isPlayingReel && showIntroCard && introEnabled)) ? 1 : 0, pointerEvents: activePrimary ? "none" : "auto", transition: "opacity 0.08s linear" }}
-                  onTimeUpdate={() => { if (!activePrimaryRef.current) handleVideoTimeUpdate() }}
-                  onEnded={() => { if (!activePrimaryRef.current) handleVideoEnded() }}
-                />
 
                 {/* Intro card overlay */}
                 {isPlayingReel && showIntroCard && introEnabled && (
