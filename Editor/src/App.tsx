@@ -1866,5 +1866,5 @@ export default function App() {
 
       {showUpgradeModal && <UpgradeModal onClose={() => setShowUpgradeModal(false)} />}
     </div>
-  )
+  );
 }
