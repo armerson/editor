@@ -56,8 +56,6 @@ function BadgePlaceholder({
   return (
     <div
       style={{
-        width: 160,
-        height: 160,
         width: sizePx,
         height: sizePx,
         borderRadius: '50%',
@@ -71,7 +69,7 @@ function BadgePlaceholder({
         flexShrink: 0,
       }}
     >
-      <span style={{ fontFamily: 'system-ui, sans-serif', fontSize: Math.round(sizePx / 10), color: 'rgba(255,255,255,0.3)' }}>
+      <span style={{ fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: Math.round(sizePx / 10), color: 'rgba(255,255,255,0.3)' }}>
         {label}
       </span>
     </div>
@@ -191,7 +189,6 @@ export const IntroCard: React.FC<IntroCardProps> = ({
         alignItems: 'center',
         flexDirection: 'column',
         opacity: cardOpacity,
-        padding: 36,
         padding: Math.round(28 * s),
         overflow: 'hidden',
       }}
@@ -235,8 +232,6 @@ export const IntroCard: React.FC<IntroCardProps> = ({
               src={effectiveHomeBadge}
               delayRenderTimeoutInMilliseconds={IMG_TIMEOUT_MS}
               style={{
-                width: 160,
-                height: 160,
                 width: badgeSizePx,
                 height: badgeSizePx,
                 objectFit: 'contain',
@@ -254,7 +249,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
           {/* Team name: wraps rather than truncates */}
           <span
             style={{
-              fontFamily: 'system-ui, sans-serif',
+              fontFamily: 'system-ui, -apple-system, sans-serif',
               fontSize: Math.round(52 * s),
               fontWeight: 700,
               color: 'rgba(255,255,255,0.92)',
@@ -271,82 +266,83 @@ export const IntroCard: React.FC<IntroCardProps> = ({
           </span>
         </div>
 
-        {/* VS */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            paddingTop: Math.round(165 * s),
-            flexShrink: 0,
-            opacity: vsOpacity,
-          }}
-        >
-          <span
-            style={{
-              fontFamily: 'system-ui, sans-serif',
-              fontSize: Math.round(80 * s),
-              fontWeight: 900,
-              color: 'rgba(255,255,255,0.50)',
-              letterSpacing: Math.round(6 * s),
-              lineHeight: 1,
-            }}
-          >
-            VS
-          </span>
-        </div>
-
-        {/* Away team */}
+        {/* VS + Away team — only rendered in dual-badge mode, matching editor behaviour.
+            Previously VS was always present in the flex row, which shifted the home badge
+            off-centre in single-badge mode. Now both elements are conditional. */}
         {hasBothBadges && (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: Math.round(16 * s),
-              width: badgeContainerWidthPx,
-            }}
-          >
-            {effectiveAwayBadge ? (
-              <Img
-                src={effectiveAwayBadge}
-                delayRenderTimeoutInMilliseconds={IMG_TIMEOUT_MS}
-                style={{
-                  width: 160,
-                  height: 160,
-                  width: badgeSizePx,
-                  height: badgeSizePx,
-                  objectFit: 'contain',
-                  borderRadius: '50%',
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 0 2.5px rgba(255,255,255,0.12)',
-                  background: 'rgba(255,255,255,0.03)',
-                  transform: `scale(${awayBadgeScale})`,
-                  opacity: awayBadgeOpacity,
-                  flexShrink: 0,
-                }}
-              />
-            ) : (
-              <BadgePlaceholder label="Away" scale={awayBadgeScale} opacity={awayBadgeOpacity} sizePx={badgeSizePx} />
-            )}
-            {/* Team name: wraps rather than truncates */}
-            <span
+          <>
+            <div
               style={{
-                fontFamily: 'system-ui, sans-serif',
-                fontSize: Math.round(52 * s),
-                fontWeight: 700,
-                color: 'rgba(255,255,255,0.92)',
-                textAlign: 'center',
-                lineHeight: 1.3,
-                letterSpacing: 0.3,
-                opacity: awayLabelOpacity,
-                transform: `translateY(${awayLabelY}px)`,
-                wordBreak: 'break-word',
-                overflowWrap: 'anywhere',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingTop: Math.round(165 * s),
+                flexShrink: 0,
+                opacity: vsOpacity,
               }}
             >
-              {awayName}
-            </span>
-          </div>
+              <span
+                style={{
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                  fontSize: Math.round(80 * s),
+                  fontWeight: 900,
+                  color: 'rgba(255,255,255,0.50)',
+                  letterSpacing: Math.round(6 * s),
+                  lineHeight: 1,
+                }}
+              >
+                VS
+              </span>
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: Math.round(16 * s),
+                width: badgeContainerWidthPx,
+              }}
+            >
+              {effectiveAwayBadge ? (
+                <Img
+                  src={effectiveAwayBadge}
+                  delayRenderTimeoutInMilliseconds={IMG_TIMEOUT_MS}
+                  style={{
+                    width: badgeSizePx,
+                    height: badgeSizePx,
+                    objectFit: 'contain',
+                    borderRadius: '50%',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 0 2.5px rgba(255,255,255,0.12)',
+                    background: 'rgba(255,255,255,0.03)',
+                    transform: `scale(${awayBadgeScale})`,
+                    opacity: awayBadgeOpacity,
+                    flexShrink: 0,
+                  }}
+                />
+              ) : (
+                <BadgePlaceholder label="Away" scale={awayBadgeScale} opacity={awayBadgeOpacity} sizePx={badgeSizePx} />
+              )}
+              {/* Team name: wraps rather than truncates */}
+              <span
+                style={{
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                  fontSize: Math.round(52 * s),
+                  fontWeight: 700,
+                  color: 'rgba(255,255,255,0.92)',
+                  textAlign: 'center',
+                  lineHeight: 1.3,
+                  letterSpacing: 0.3,
+                  opacity: awayLabelOpacity,
+                  transform: `translateY(${awayLabelY}px)`,
+                  wordBreak: 'break-word',
+                  overflowWrap: 'anywhere',
+                }}
+              >
+                {awayName}
+              </span>
+            </div>
+          </>
         )}
       </div>
 
@@ -371,7 +367,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
           alignItems: 'center',
           gap: Math.round(5 * s),
           textAlign: 'center',
-          fontFamily: 'system-ui, sans-serif',
+          fontFamily: 'system-ui, -apple-system, sans-serif',
           opacity: subtitleOpacity,
           transform: `translateY(${subtitleY}px)`,
         }}
@@ -447,7 +443,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
             opacity: subtitleOpacity,
           }}
         >
-          <span style={{ fontFamily: 'system-ui, sans-serif', fontSize: Math.round(18 * s), color: 'rgba(255,255,255,0.20)', letterSpacing: Math.round(2 * s), textTransform: 'uppercase' }}>
+          <span style={{ fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: Math.round(18 * s), color: 'rgba(255,255,255,0.20)', letterSpacing: Math.round(2 * s), textTransform: 'uppercase' }}>
             Sponsored by
           </span>
           <Img
@@ -462,7 +458,7 @@ export const IntroCard: React.FC<IntroCardProps> = ({
       {!hasBothBadges && !effectiveHomeBadge && !effectiveAwayBadge && (
         <h1
           style={{
-            fontFamily: 'system-ui, sans-serif',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
             fontSize: Math.round(64 * s),
             fontWeight: 700,
             color: '#fff',

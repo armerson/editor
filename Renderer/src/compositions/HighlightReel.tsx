@@ -6,6 +6,13 @@ import { OutroCard } from '../components/OutroCard';
 import { ClipSegment } from '../components/ClipSegment';
 import { ScoreboardOverlay } from '../components/ScoreboardOverlay';
 import { LowerThirdsOverlay } from '../components/LowerThirdsOverlay';
+import {
+  getClipDurationSeconds,
+  buildClipStartFrames,
+  buildAbsoluteGoals,
+  buildGoalDebugInfo,
+  type AbsoluteGoal,
+} from '../lib/reelTiming';
 
 // ─── Sponsor logo overlay ──────────────────────────────────────────────────────
 const SPONSOR_IMG_TIMEOUT_MS = 90_000;
@@ -84,59 +91,6 @@ export type HighlightReelProps = HighlightReelData & {
 };
 
 const FPS = 30;
-
-type AbsoluteGoal = GoalEvent & {
-  /** Frame (in reel timeline) when the goal happens */
-  atFrame: number;
-};
-
-function getClipDurationSeconds(clip: HighlightReelData['clips'][0]): number {
-  if (clip.durationSeconds != null && clip.durationSeconds > 0) {
-    return clip.durationSeconds;
-  }
-  if (clip.trimEnd != null && clip.trimStart != null) {
-    return Math.max(0, clip.trimEnd - clip.trimStart);
-  }
-  if (clip.trimEnd != null) {
-    return Math.max(0, clip.trimEnd - (clip.trimStart ?? 0));
-  }
-  return 5;
-}
-
-function buildAbsoluteGoals(params: {
-  goals: GoalEvent[] | undefined;
-  clips: HighlightReelData['clips'];
-  clipStartFrames: number[];
-  fps: number;
-}): AbsoluteGoal[] {
-  const { goals, clips, clipStartFrames, fps } = params;
-  if (!goals?.length) return [];
-
-  const clipIdToStartFrame = new Map<string, number>();
-  const clipIdToTrimStart = new Map<string, number>();
-  for (let i = 0; i < clips.length; i++) {
-    const clip = clips[i];
-    const id = clip?.id;
-    if (id) {
-      clipIdToStartFrame.set(id, clipStartFrames[i] ?? 0);
-      clipIdToTrimStart.set(id, clip?.trimStart ?? 0);
-    }
-  }
-
-  const out: AbsoluteGoal[] = [];
-  for (const g of goals) {
-    const start = clipIdToStartFrame.get(g.clipId);
-    if (start == null) continue;
-    // timeInClip is an absolute source-video timestamp; subtract trimStart to get
-    // the clip-relative offset, then add the clip's start frame in the reel.
-    const trimStart = clipIdToTrimStart.get(g.clipId) ?? 0;
-    const atFrame = start + Math.round((g.timeInClip - trimStart) * fps);
-    out.push({ ...g, atFrame });
-  }
-
-  out.sort((a, b) => a.atFrame - b.atFrame);
-  return out;
-}
 
 const CumulativeScoreboard: React.FC<{
   fps: number;
@@ -304,58 +258,81 @@ export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
   const introRoleClips = clips.filter(c => c.role === 'intro');
   const normalClips = clips.filter(c => !c.role || c.role === 'normal');
   const outroRoleClips = clips.filter(c => c.role === 'outro');
-  const allOrderedClips = [...introRoleClips, ...normalClips, ...outroRoleClips];
 
-  // Build clipStartFrames for allOrderedClips with intro/outro card gaps
-  const clipStartFrames: number[] = [];
-  const introRoleClipFrames = introRoleClips.reduce((s, c) => s + Math.ceil(getClipDurationSeconds(c) * fps), 0);
+  const outroDurationFrames = props.outro?.durationSeconds > 0
+    ? Math.ceil(props.outro.durationSeconds * fps)
+    : 0;
+
+  // Build clip start frames using the shared helper (mirrors App.tsx reelClipStartTimes).
+  const { allOrderedClips, clipStartFrames, normalClipsStartFrame } = buildClipStartFrames({
+    introRoleClips,
+    normalClips,
+    outroRoleClips,
+    introDurationFrames,
+    outroDurationFrames,
+    fps,
+  });
+
+  const introRoleClipFrames = introRoleClips.reduce(
+    (s, c) => s + Math.ceil(getClipDurationSeconds(c) * fps),
+    0
+  );
   const introCardStartFrame = introRoleClipFrames;
-  const outroDurationFrames2 = props.outro?.durationSeconds > 0 ? Math.ceil(props.outro.durationSeconds * fps) : 0;
-  {
-    let acc = 0;
-    // intro-role clips start at 0 (before intro card)
-    for (let i = 0; i < introRoleClips.length; i++) {
-      clipStartFrames.push(acc);
-      acc += Math.ceil(getClipDurationSeconds(introRoleClips[i]) * fps);
-    }
-    // Intro card
-    acc += introDurationFrames;
-    // normal clips
-    for (let i = 0; i < normalClips.length; i++) {
-      clipStartFrames.push(acc);
-      acc += Math.ceil(getClipDurationSeconds(normalClips[i]) * fps);
-    }
-    // Outro card
-    acc += outroDurationFrames2;
-    // outro-role clips
-    for (let i = 0; i < outroRoleClips.length; i++) {
-      clipStartFrames.push(acc);
-      acc += Math.ceil(getClipDurationSeconds(outroRoleClips[i]) * fps);
-    }
-  }
-
-  // The frame at which normal clip content begins (used by CumulativeScoreboard)
-  const normalClipsStartFrame = introRoleClipFrames + introDurationFrames;
 
   // ── Diagnostics (captured by server onBrowserLog) ─────────────────────────
   const totalReelFrames = getHighlightReelDurationInFrames(props);
   logOnce(frame, `clips=${clips.length} intro=${introDurationFrames}f total=${totalReelFrames}f fps=${fps}`)
   logOnce(frame, `scoreboard: home=${props.scoreboard?.homeTeamName ?? '(none)'} ${props.scoreboard?.homeScore ?? 0} – away=${props.scoreboard?.awayTeamName ?? '(none)'} ${props.scoreboard?.awayScore ?? 0} visible=${props.scoreboard?.visible ?? false}`)
   logOnce(frame, `goals=${props.goals?.length ?? 0} clipAudioOn=${props.music?.clipAudioOn ?? false}`)
+
+  // Per-clip diagnostics
   for (let i = 0; i < allOrderedClips.length; i++) {
     const c = allOrderedClips[i];
-    logOnce(frame, `clip[${i + 1}] "${c.name ?? '?'}" src=${c.src ? 'ok' : 'MISSING'} trim=${c.trimStart ?? 0}-${c.trimEnd ?? '?'} role=${c.role ?? 'normal'} muteAudio=${c.muteAudio ?? false}`)
+    const startF = clipStartFrames[i] ?? 0;
+    const durSec = getClipDurationSeconds(c);
+    const durF = Math.ceil(durSec * fps);
+    logOnce(frame,
+      `clip[${i + 1}] id=${c.id ?? '?'} "${c.name ?? '?'}" ` +
+      `src=${c.src ? 'ok' : 'MISSING'} ` +
+      `trim=${c.trimStart ?? 0}-${c.trimEnd ?? '?'} ` +
+      `durSec=${durSec.toFixed(3)} ` +
+      `reelOffset=${startF}f (${(startF / fps).toFixed(3)}s) ` +
+      `reelEnd=${startF + durF}f (${((startF + durF) / fps).toFixed(3)}s) ` +
+      `role=${c.role ?? 'normal'} muteAudio=${c.muteAudio ?? false}`
+    )
   }
+
+  // Goal timing diagnostics — emitted once at frame 0
   if (props.goals?.length) {
-    for (const g of props.goals) {
-      logOnce(frame, `goal: clipId=${g.clipId} t=${g.timeInClip}s side=${g.side} scorer=${g.scorerName ?? '(none)'}`)
+    const absoluteGoals = buildAbsoluteGoals({ goals: props.goals, clips: allOrderedClips, clipStartFrames, fps });
+    const debugInfos = buildGoalDebugInfo({ absoluteGoals, clips: allOrderedClips, clipStartFrames, fps });
+    for (const d of debugInfos) {
+      logOnce(frame,
+        `goal id=${d.goalId ?? '?'} clipId=${d.clipId} ` +
+        `timeInClip=${d.timeInClip.toFixed(3)}s trimStart=${d.trimStart.toFixed(3)}s ` +
+        `clipOffset=${d.clipStartFrame}f (${(d.clipStartFrame / fps).toFixed(3)}s) ` +
+        `atFrame=${d.atFrame} (${d.atSeconds.toFixed(3)}s) ` +
+        `scorerVisible=${d.scorerVisibleFromFrame}–${d.scorerVisibleToFrame}f ` +
+        `(${(d.scorerVisibleFromFrame / fps).toFixed(2)}s – ${(d.scorerVisibleToFrame / fps).toFixed(2)}s)`
+      )
+    }
+
+    // Scoreboard active-state summary: list every goal with home/away score after it
+    let h = props.scoreboard?.homeScore ?? 0;
+    let a = props.scoreboard?.awayScore ?? 0;
+    logOnce(frame, `scoreboard baseline: ${h}–${a}`)
+    for (const g of absoluteGoals) {
+      if (g.side === 'home') h += 1; else a += 1;
+      logOnce(frame, `  after goal ${g.id ?? '?'} (frame ${g.atFrame}): ${h}–${a} scorer="${g.scorerName ?? ''}"`)
     }
   }
+
   // Warn about dropped clips (had no src after filtering)
   const droppedCount = allClips.length - clips.length;
   if (droppedCount > 0) {
     warnOnce(frame, `${droppedCount} clip(s) dropped due to missing src`)
   }
+
   // Determine which clip is rendering right now (for per-frame diagnostics)
   React.useMemo(() => {
     for (let i = 0; i < allOrderedClips.length; i++) {
@@ -447,17 +424,16 @@ export const HighlightReel: React.FC<HighlightReelProps> = (props) => {
 
       {/* Outro card — shown after normal clips, before outro-role clips */}
       {props.outro && props.outro.durationSeconds > 0 && (() => {
-        const outroDurationFrames = Math.ceil(props.outro.durationSeconds * fps);
-        // Outro card starts after intro-role clips + intro card + normal clips
+        const outroDurFrames = Math.ceil(props.outro.durationSeconds * fps);
         const normalClipsFrames = normalClips.reduce((s, c) => s + Math.ceil(getClipDurationSeconds(c) * fps), 0);
         const outroStartFrame = introRoleClipFrames + introDurationFrames + normalClipsFrames;
         return (
-          <Sequence from={outroStartFrame} durationInFrames={outroDurationFrames} name="Outro">
+          <Sequence from={outroStartFrame} durationInFrames={outroDurFrames} name="Outro">
             <OutroCard
               finalScore={props.outro.finalScore}
               sponsorLogoUrls={props.outro.sponsorLogoUrls}
               durationSeconds={props.outro.durationSeconds}
-              durationFrames={outroDurationFrames}
+              durationFrames={outroDurFrames}
               fps={fps}
               homeTeam={props.intro?.title}
               opponent={props.intro?.opponent}

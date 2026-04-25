@@ -1637,7 +1637,7 @@ export default function App() {
                   </button>
                 )}
                 {selectedClip?.url && isNormalClip && selectedClip.showScoreboard && !(isPlayingReel && (showIntroCard || showOutroCard)) && (
-                  <ScoreboardOverlay scoreboard={scoreboard} minuteMarker={selectedClip.minuteMarker ?? ""} goals={goals} clips={clips} clipId={selectedClip.id} currentTimeInClip={videoCurrentTime} showScorerAfterGoal={selectedClip.showScorerAfterGoal} />
+                  <ScoreboardOverlay scoreboard={scoreboard} minuteMarker={selectedClip.minuteMarker ?? ""} goals={goals} clips={reelPlaybackOrder} clipId={selectedClip.id} currentTimeInClip={videoCurrentTime} showScorerAfterGoal={selectedClip.showScorerAfterGoal} />
                 )}
 
                 {/* Primary sponsor logo — corner for 16:9, centred in bottom black bar for 1:1 / 9:16 */}

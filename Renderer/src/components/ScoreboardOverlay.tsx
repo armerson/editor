@@ -43,7 +43,7 @@ export const ScoreboardOverlay: React.FC<ScoreboardOverlayProps> = ({
             padding: `${Math.round(14 * s)}px ${Math.round(28 * s)}px`,
             backgroundColor: 'rgba(0,0,0,0.75)',
             borderRadius: Math.round(8 * s),
-            fontFamily: 'system-ui, sans-serif',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
             color: '#fff',
             fontSize: Math.round(44 * s),
           }}
@@ -94,7 +94,7 @@ export const ScoreboardOverlay: React.FC<ScoreboardOverlayProps> = ({
                 paddingTop: Math.round(7 * s),
                 borderTop: '1px solid rgba(255,255,255,0.2)',
                 fontSize: Math.round(36 * s),
-                fontFamily: 'system-ui, sans-serif',
+                fontFamily: 'system-ui, -apple-system, sans-serif',
                 color: '#facc15',
                 whiteSpace: 'nowrap',
               }}
